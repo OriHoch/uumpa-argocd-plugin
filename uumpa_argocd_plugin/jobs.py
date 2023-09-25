@@ -119,7 +119,8 @@ def run_local(namespace_name, chart_path, *args):
         raise Exception('Some jobs failed')
 
 
-def run_argocd(job):
+def run_argocd(job_json_b64):
+    job = json.loads(base64.b64decode(job_json_b64).decode())
     generator = job['generator']
     data_ = job['data']
     job_files_b64 = {}

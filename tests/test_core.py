@@ -179,11 +179,11 @@ def test_process_generator_job():
                             'command': ['uumpa-argocd-plugin'],
                             'args': [
                                 'run-generator-job',
-                                json.dumps({
+                                base64.b64encode(json.dumps({
                                     'generator': generator,
                                     'data': data,
                                     'file_paths': ['init.sh', 'data.json']
-                                })
+                                }).encode()).decode()
                             ]
                         }
                     ]

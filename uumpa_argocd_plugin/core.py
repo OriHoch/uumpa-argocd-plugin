@@ -99,11 +99,11 @@ def process_generator_job(generator, data_):
                 },
                 'data': files_configmap_data
             }
-        container['args'] = ['run-generator-job', json.dumps({
+        container['args'] = ['run-generator-job', base64.b64encode(json.dumps({
             'generator': generator,
             'data': data_,
             'file_paths': file_paths
-        })]
+        }).encode()).decode()]
         yield {
             'apiVersion': 'batch/v1',
             'kind': 'Job',

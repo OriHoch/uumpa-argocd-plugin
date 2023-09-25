@@ -44,6 +44,7 @@ def post_process_generator_items(items_iterator, data_, loaded_modules):
 def process(data_):
     chart_path = data_['__chart_path']
     loaded_modules = set()
-    with open(os.path.join(chart_path, config.ARGOCD_ENV_UUMPA_GENERATORS_CONFIG)) as f:
-        for item in post_process_generator_items(process_generators(common.yaml_load(f), data_, loaded_modules), data_, loaded_modules):
-            yield common.yaml_dump(item)
+    if os.path.exists(os.path.join(chart_path, config.ARGOCD_ENV_UUMPA_GENERATORS_CONFIG)):
+        with open(os.path.join(chart_path, config.ARGOCD_ENV_UUMPA_GENERATORS_CONFIG)) as f:
+            for item in post_process_generator_items(process_generators(common.yaml_load(f), data_, loaded_modules), data_, loaded_modules):
+                yield common.yaml_dump(item)

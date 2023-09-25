@@ -25,7 +25,7 @@ jobs:
         run: |
           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u orihoch --password-stdin &&\
           docker pull ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest &&\
-          docker build -t ghcr.io/orihoch/uumpa-argocd-plugin/plugin:${{ github.sha }} --cache-from ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest . &&\
+          docker build --cache-from ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest -t ghcr.io/orihoch/uumpa-argocd-plugin/plugin:${{ github.sha }} . &&\
           docker push ghcr.io/orihoch/uumpa-argocd-plugin/plugin:${{ github.sha }} &&\
           docker tag ghcr.io/orihoch/uumpa-argocd-plugin/plugin:${{ github.sha }} ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest &&\
           docker push ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest

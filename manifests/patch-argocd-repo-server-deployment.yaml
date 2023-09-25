@@ -28,7 +28,7 @@ spec:
             - mountPath: /.cache
               name: uumpa-cache
             - mountPath: /tmp
-              name: uumpa-tmp
+              name: uumpa-temp
             - mountPath: /home/argocd/cmp-server/config/plugin.yaml
               subPath: plugin.yaml
               name: uumpa-plugin-config

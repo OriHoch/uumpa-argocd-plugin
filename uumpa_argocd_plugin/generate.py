@@ -1,0 +1,45 @@
+import os
+import subprocess
+
+from . import data, common, generators
+
+
+def generate_local(namespace_name, chart_path, *helm_args, only_generators=False):
+    if only_generators:
+        assert not helm_args
+    data_ = data.process(namespace_name, chart_path)
+    output = [
+        *generators.process(data_)
+    ]
+    if not only_generators:
+        output.append(subprocess.check_output(['helm', 'template', '.', '--namespace', namespace_name, *helm_args], text=True, cwd=chart_path))
+    print(common.render(
+        '\n---\n'.join(output),
+        data_
+    ))
+
+
+def generate_argocd():
+    chart_path = os.getcwd()
+    app_name = os.environ['ARGOCD_APP_NAME']
+    namespace_name = os.environ['ARGOCD_APP_NAMESPACE']
+    kube_version = os.environ.get('KUBE_VERSION')
+    kube_api_versions = os.environ.get('KUBE_API_VERSIONS')
+    helm_args = os.environ.get('ARGOCD_ENV_HELM_ARGS')
+    data_ = data.process(namespace_name, chart_path)
+    cmd = f'helm template . --name-template {app_name} --namespace {namespace_name}'
+    if kube_version:
+        cmd += f' --kube-version {kube_version}'
+    if kube_api_versions:
+        for version in kube_api_versions.split(','):
+            cmd += f' --api-versions {version}'
+    if helm_args:
+        cmd += f' {helm_args}'
+    output = [
+        *generators.process(data_),
+        subprocess.check_output(cmd, shell=True, text=True, cwd=chart_path)
+    ]
+    print(common.render(
+        '\n---\n'.join(output),
+        data_
+    ))

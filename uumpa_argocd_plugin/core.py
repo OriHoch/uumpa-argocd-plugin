@@ -121,6 +121,7 @@ def process_generator_job(generator, data_):
             'spec': {
                 'template': {
                     'spec': {
+                        'restartPolicy': 'Never',
                         'automountServiceAccountToken': True,
                         'serviceAccountName': repo_server_spec['serviceAccountName'],
                         'tolerations': repo_server_spec.get('tolerations', []),

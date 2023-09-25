@@ -162,6 +162,7 @@ def test_process_generator_job():
                 'spec': {
                     'automountServiceAccountToken': True,
                     'serviceAccountName': 'argocd-repo-server',
+                    'restartPolicy': 'Never',
                     'tolerations': [
                         {'key': 'dedicated', 'operator': 'Equal', 'value': 'repo-server', 'effect': 'NoSchedule'}
                     ],

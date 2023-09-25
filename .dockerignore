@@ -1,0 +1,12 @@
+.github
+.pytest_cache
+manifests
+tests
+*.egg-info
+venv
+.dockerignore
+.gitignore
+Dockerfile
+LICENSE
+README.md
+requirements.in

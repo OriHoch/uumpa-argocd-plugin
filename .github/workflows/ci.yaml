@@ -2,6 +2,8 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - manifests/
 jobs:
   ci:
     runs-on: ubuntu-latest
@@ -22,7 +24,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u orihoch --password-stdin &&\
-          docker build -t ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest . &&\
+          docker build -t ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest --cache-from ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest . &&\
           docker push ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest &&\
           docker tag ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest ghcr.io/orihoch/uumpa-argocd-plugin/plugin:${{ github.sha }} &&\
           docker push ghcr.io/orihoch/uumpa-argocd-plugin/plugin:${{ github.sha }}
+      - name: update patch
+        run: |
+          python .github/workflows/update_patch_image.py ghcr.io/orihoch/uumpa-argocd-plugin/plugin:${{ github.sha }} &&\
+          git config --global user.email "ci@localhost" &&\
+          git config --global user.name "CI" &&\
+          git add manifests/patch-argocd-repo-server-deployment.yaml &&\
+          git commit -m "update patch image" &&\
+          git push

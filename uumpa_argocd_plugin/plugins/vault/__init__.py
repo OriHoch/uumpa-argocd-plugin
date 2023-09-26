@@ -1,4 +1,7 @@
+import os
 import json
+
+import requests
 
 
 def process_generator(generator, data_):
@@ -29,3 +32,41 @@ def post_process_generator_items(items, data_):
         return True, new_items
     else:
         return False, new_items
+
+
+def vault_init():
+    addr = os.environ['VAULT_ADDR']
+    role_id = os.environ['VAULT_ROLE_ID']
+    secret_id = os.environ['VAULT_SECRET_ID']
+    data_path_prefix = os.environ.get('VAULT_PATH') or 'v1/kv/data'
+    res = requests.post(
+        f"{addr}/v1/auth/approle/login",
+        data=json.dumps({"role_id": role_id, "secret_id": secret_id}),
+        headers={'Content-Type': 'application/json'}
+    )
+    assert res.status_code == 200, res.text
+    token = res.json()['auth']['client_token']
+    return token, addr, data_path_prefix
+
+
+def vault_set(token, addr, data_path_prefix, path, data):
+    res = requests.post(
+        os.path.join(addr, data_path_prefix, path),
+        headers={
+            'Content-Type': 'application/json',
+            'X-Vault-Token': token
+        },
+        data=json.dumps({
+            'data': data
+        })
+    )
+    res.raise_for_status()
+
+
+def run_generator_job(tmpdir, env):
+    token, addr, data_path_prefix = vault_init()
+    vault_generators = json.loads(env['VAULT_GENERATORS_JSON'])
+    for vault_generator in vault_generators:
+        path = vault_generator['path']
+        data = vault_generator['data']
+        vault_set(token, addr, data_path_prefix, path, data)

@@ -224,7 +224,7 @@ def test_process_generator_secret_configmap():
         }
     ) == {
         'apiVersion': 'v1',
-        'kind': 'Configmap',
+        'kind': 'ConfigMap',
         'metadata': {
             'name': 'my_config',
             'namespace': 'my_namespace'

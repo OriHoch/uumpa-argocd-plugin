@@ -57,6 +57,6 @@ def test_run_argocd():
             )
             mock_run.assert_called_once_with(
                 ['kubectl', 'apply', '-f', '-'],
-                input='{"apiVersion": "v1", "kind": "Configmap", "metadata": {"name": "nfs-initializaed", "namespace": "storage"}, "data": {"initialized": "yes"}}',
+                input='{"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "nfs-initializaed", "namespace": "storage"}, "data": {"initialized": "yes"}}',
                 text=True, check=True
             )

@@ -30,7 +30,7 @@ def test_generate_local():
         assert list(common.yaml_load_all(output)) == [
             {
                 'apiVersion': 'v1',
-                'kind': 'Configmap',
+                'kind': 'ConfigMap',
                 'metadata': {'name': 'my_config', 'namespace': 'my_namespace'},
                 'data': {'foo': 'bar'},
             },
@@ -73,7 +73,7 @@ def test_generate_argocd():
         assert list(common.yaml_load_all(output)) == [
             {
                 'apiVersion': 'v1',
-                'kind': 'Configmap',
+                'kind': 'ConfigMap',
                 'metadata': {'name': 'my_config', 'namespace': 'my_namespace'},
                 'data': {'foo': 'bar'},
             },

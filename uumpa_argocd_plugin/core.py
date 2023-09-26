@@ -146,7 +146,7 @@ def process_generator_secret_configmap(type_, generator, data_):
     }
     return {
         'apiVersion': 'v1',
-        'kind': type_.capitalize(),
+        'kind': {'secret': 'Secret', 'configmap': 'ConfigMap'}[type_],
         'metadata': {
             'name': generator['name'],
             'namespace': generator.get('namespace') or data_['__namespace_name'],

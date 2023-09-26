@@ -1,4 +1,5 @@
 import os
+import json
 import tempfile
 
 from uumpa_argocd_plugin import data, config, common
@@ -7,7 +8,7 @@ from uumpa_argocd_plugin import data, config, common
 def test_process():
     with tempfile.TemporaryDirectory() as tmpdir:
         with open(os.path.join(tmpdir, config.ARGOCD_ENV_UUMPA_DATA_CONFIG), 'w') as f:
-            common.yaml_dump([
+            json.dump([
                 {
                     'key': 'value',
                 },

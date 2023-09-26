@@ -15,15 +15,6 @@ def yaml_load_all(stream):
     return yaml.load_all(stream)
 
 
-def yaml_dump(data, stream=None):
-    if stream is None:
-        stream = io.StringIO()
-        yaml.dump(data, stream=stream)
-        return stream.getvalue()
-    else:
-        yaml.dump(data, stream=stream)
-
-
 def render_string(v):
     if v or v in ['0', 0]:
         return str(v)

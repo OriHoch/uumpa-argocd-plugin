@@ -1,6 +1,7 @@
 import io
 import os
 import sys
+import json
 import tempfile
 
 from unittest.mock import patch
@@ -11,9 +12,9 @@ from uumpa_argocd_plugin import generate, common, config
 def test_generate_local():
     with tempfile.TemporaryDirectory() as tmpdir:
         with open(os.path.join(tmpdir, config.ARGOCD_ENV_UUMPA_DATA_CONFIG), 'w') as f:
-            common.yaml_dump([{'key': 'value'}], f)
+            json.dump([{'key': 'value'}], f)
         with open(os.path.join(tmpdir, config.ARGOCD_ENV_UUMPA_GENERATORS_CONFIG), 'w') as f:
-            common.yaml_dump([{'type': 'configmap', 'name': 'my_config', 'data': {'foo': 'bar'}}], f)
+            json.dump([{'type': 'configmap', 'name': 'my_config', 'data': {'foo': 'bar'}}], f)
         old_stdout = sys.stdout
         new_stdout = io.StringIO()
         sys.stdout = new_stdout
@@ -43,9 +44,9 @@ def test_generate_local():
 def test_generate_argocd():
     with tempfile.TemporaryDirectory() as tmpdir:
         with open(os.path.join(tmpdir, config.ARGOCD_ENV_UUMPA_DATA_CONFIG), 'w') as f:
-            common.yaml_dump([{'key': 'value'}], f)
+            json.dump([{'key': 'value'}], f)
         with open(os.path.join(tmpdir, config.ARGOCD_ENV_UUMPA_GENERATORS_CONFIG), 'w') as f:
-            common.yaml_dump([{'type': 'configmap', 'name': 'my_config', 'data': {'foo': 'bar'}}], f)
+            json.dump([{'type': 'configmap', 'name': 'my_config', 'data': {'foo': 'bar'}}], f)
         os.chdir(tmpdir)
         os.environ.update({
             'ARGOCD_APP_NAME': 'my_app',

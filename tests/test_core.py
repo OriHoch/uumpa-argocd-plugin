@@ -216,11 +216,12 @@ def test_process_generator_secret_configmap():
             'data': {
                 'name': 'p_~user.name~',
                 'pass': '~user_pass~',
+                'initialized': "yes"
             }
         },
         {
             'user': {'name': 'username'},
-            'user_pass': 'password'
+            'user_pass': 'password',
         }
     ) == {
         'apiVersion': 'v1',
@@ -231,6 +232,7 @@ def test_process_generator_secret_configmap():
         },
         'data': {
             'name': 'p_username',
-            'pass': 'password'
+            'pass': 'password',
+            'initialized': "yes",
         }
     }

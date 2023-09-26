@@ -46,7 +46,7 @@ by creating file `uumpa_data.yaml` in the chart root directory:
     key: ip
   alertmanager_secret:
     type: secret
-    name: alertmanager_httpauth
+    name: alertmanager-httpauth
     # this will set the value as a map of the keys and their values
     keys: [auth, password]
 - # if statement is in Python code which has access to all the data from the previous items as local variables
@@ -63,8 +63,15 @@ by creating file `uumpa_data.yaml` in the chart root directory:
     password: ~alertmanager_secret.password~
 - nfs_initialized:
     type: configmap
-    name: nfs_init
+    name: nfs-init
     key: initialized
+# can also set values to objects, in this case data will contain a user object with name and password fields
+- user.name: admin
+  user.password:
+    type: password
+    length: 18
+# this object can then be used in templates or other fields
+- user_auth: ~user.name~:~user.password~
 ```
 
 The same string templating will also be applied to the resulting templates from the Helm chart, so you can include
@@ -75,7 +82,7 @@ This is done in the `uumpa_generators.yaml` file:
 
 ```yaml
 - type: secret
-  name: alertmanager_httpauth
+  name: alertmanager-httpauth
   data:
       auth: ~alertmanager_secret.auth~
       user: ~alertmanager_user~
@@ -99,7 +106,7 @@ This is done in the `uumpa_generators.yaml` file:
   # generators will run after this job completed successfully, or if the job was skipped due to it's if condition
   generators:
     - type: configmap
-      name: nfs_init
+      name: nfs-init
       data:
         initialized: "true"
 ```
@@ -232,7 +239,7 @@ Runs a script using the same image and configuration as the Uumpa argocd plugin 
 | type                   | `job`                                                                                                             | -                                  |
 | hook                   | ArgoCD hook to run the job as, see https://argo-cd.readthedocs.io/en/stable/user-guide/resource_hooks/            | PreSync                            |
 | hook-delete-policy     | ArgoCD hook delete policy, see https://argo-cd.readthedocs.io/en/stable/user-guide/resource_hooks/                | HookSucceeded                      |
-| name                   | Name of the hook, required for identification                                                                     | -                                  |
+| name                   | Name of the hook, required for identification, must be valid for Kubernetes job / configmap name                  | -                                  |
 | script                 | Path to script relative to the chart root, script will run as executable so make sure it has a shebang            | -                                  |
 | python-module-function | Name of python module function to run instead of the script                                                       | -                                  | 
 | files                  | list of files to copy from the chart root to be available for the script                                          | -                                  |

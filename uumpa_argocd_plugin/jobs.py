@@ -124,7 +124,7 @@ def run_argocd(job_json_b64):
     generator = job['generator']
     data_ = job['data']
     job_files_b64 = {}
-    for i, file_path in job.get('file_paths', []):
+    for i, file_path in enumerate(job.get('file_paths', [])):
         with open(f'/var/uumpa-job-files/file_{i}') as f:
             job_files_b64[file_path] = f.read()
     assert _run_job(job, job_files_b64, generator, data_)

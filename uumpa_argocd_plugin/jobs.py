@@ -31,7 +31,7 @@ def run_job_script(generator, tmpdir, env, dry_run):
         dry_run_print_dir(tmpdir)
         print('\n-----------------\n')
     else:
-        subprocess.check_call([script], cwd=tmpdir, env={**os.environ, **env})
+        subprocess.check_call([os.path.join(tmpdir, script)], cwd=tmpdir, env={**os.environ, **env})
 
 
 def run_job_python(generator, tmpdir, env, dry_run):
@@ -119,12 +119,12 @@ def run_local(namespace_name, chart_path, *args):
         raise Exception('Some jobs failed')
 
 
-def run_argocd(job_json_b64):
+def run_argocd(job_json_b64, uumpa_job_files_path='/var/uumpa-job-files'):
     job = json.loads(base64.b64decode(job_json_b64).decode())
     generator = job['generator']
     data_ = job['data']
     job_files_b64 = {}
     for i, file_path in enumerate(job.get('file_paths', [])):
-        with open(f'/var/uumpa-job-files/file_{i}') as f:
-            job_files_b64[file_path] = f.read()
+        with open(os.path.join(uumpa_job_files_path, f'file_{i}')) as f:
+            job_files_b64[f'file_{i}'] = f.read().strip()
     assert _run_job(job, job_files_b64, generator, data_)

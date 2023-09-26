@@ -67,7 +67,7 @@ def process_generator_job(generator, data_):
         namespace_name = data_['__namespace_name']
         hook_name = generator['name']
         hook = generator.get('hook', 'PreSync')
-        hook_delete_policy = generator.get('hook-delete-policy', 'HookSucceeded')
+        hook_delete_policy = generator.get('hook-delete-policy', 'BeforeHookCreation')
         volumes = repo_server_spec['volumes']
         if len(file_paths) > 0:
             volumes = [

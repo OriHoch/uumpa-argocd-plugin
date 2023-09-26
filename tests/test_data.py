@@ -16,7 +16,7 @@ def test_process():
                     'foo': 'bar-~key~',
                 },
                 {
-                    'baz': '~cab~',
+                    'baz.x': '~cab~',
                     'cab': 'rab',
                 }
             ], f)
@@ -27,5 +27,7 @@ def test_process():
             'if': 'key == "value"',
             'foo': 'bar-value',
             'cab': 'rab',
-            'baz': 'rab'
+            'baz': {
+                'x': 'rab',
+            }
         }

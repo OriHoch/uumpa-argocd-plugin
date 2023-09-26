@@ -5,6 +5,18 @@ import importlib
 from . import config, common
 
 
+def process_data_keys(data_):
+    for k, v in list(data_.items()):
+        if '.' in k:
+            del data_[k]
+            obj, key, *extra = k.split('.')
+            assert len(extra) == 0, f'Only one level of nesting is supported for data keys, got {k}'
+            if obj not in data_:
+                data_[obj] = {}
+            assert isinstance(data_[obj], dict), f'Cannot set {k} because {obj} is not a dict'
+            data_[obj][key] = v
+
+
 def process_value(key, value, data_):
     if isinstance(value, str):
         data_[key] = common.render(value, data_)
@@ -12,6 +24,7 @@ def process_value(key, value, data_):
         assert isinstance(value, dict)
         plugin = value.get('plugin') or 'uumpa_argocd_plugin.core'
         importlib.import_module(plugin).process_value(key, value, data_)
+    process_data_keys(data_)
 
 
 def process(namespace_name, chart_path):

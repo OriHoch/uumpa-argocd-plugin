@@ -1,5 +1,5 @@
 import os
-import io
+import json
 
 from ruamel.yaml import YAML
 
@@ -13,6 +13,14 @@ def yaml_load(stream):
 
 def yaml_load_all(stream):
     return yaml.load_all(stream)
+
+
+def yaml_dump_dict(d):
+    assert isinstance(d, dict)
+    out = []
+    for k, v in d.items():
+        out.append(f'{k}: {json.dumps(v)}')
+    return '\n'.join(out) + '\n'
 
 
 def render_string(v):

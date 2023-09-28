@@ -12,7 +12,7 @@ spec:
         - name: uumpa
           command: ["/var/run/argocd/argocd-cmp-server"]
           # tag is commit hash from this repository, it is updated automatically by the CI to the latest commit
-          image: ghcr.io/orihoch/uumpa-argocd-plugin/plugin:7193f858e53ac825a7e87fdad3e5c32ec4afc46f
+          image: ghcr.io/orihoch/uumpa-argocd-plugin/plugin:7a2d885d4e28a1dbaceb99d854e03af085a870a6
           # depending on the plugins you use, you might need to add some env vars here
           # env:
           #   - name: ...

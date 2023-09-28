@@ -13,10 +13,16 @@ def generate_local(namespace_name, chart_path, *helm_args, only_generators=False
     ]
     if not only_generators:
         output.append(subprocess.check_output(['helm', 'template', '.', '--namespace', namespace_name, *helm_args], text=True, cwd=chart_path))
-    print(common.render(
-        '\n---\n'.join(output),
-        data_
-    ))
+    output = common.render('\n---\n'.join(output), data_)
+    output = post_process_output(output, data_)
+    print(output)
+
+
+def post_process_output(output, data_):
+    for module in data_.pop('__loaded_modules'):
+        if hasattr(module, 'post_process_output'):
+            output = module.post_process_output(output, data_)
+    return output
 
 
 def generate_argocd():
@@ -39,7 +45,6 @@ def generate_argocd():
         *generators.process(data_),
         subprocess.check_output(cmd, shell=True, text=True, cwd=chart_path)
     ]
-    print(common.render(
-        '\n---\n'.join(output),
-        data_
-    ))
+    output = common.render('\n---\n'.join(output), data_)
+    output = post_process_output(output, data_)
+    print(output)

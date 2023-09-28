@@ -49,3 +49,4 @@ def process(data_):
         with open(os.path.join(chart_path, config.ARGOCD_ENV_UUMPA_GENERATORS_CONFIG)) as f:
             for item in post_process_generator_items(process_generators(common.yaml_load(f), data_, loaded_modules), data_, loaded_modules):
                 yield common.yaml_dump_dict(item)
+    data_['__loaded_modules'] = loaded_modules

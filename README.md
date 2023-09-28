@@ -366,7 +366,8 @@ def process_generator(generator, data):
 
 ##### Process
 
-This function allows to modify the generated items before they are returned to the caller.
+This function allows to modify the generated items before they are returned to the caller. It will be called if it's
+implemented by the plugin, and if the plugin yielded at least one item from the `process_generator` function.
 
 Common use cases are to do bulk processing of multiple generator items, or to delete / modify items.
 
@@ -400,6 +401,22 @@ def post_process_generator_items(items, data):
         # return False to indicate that the items were not changed
         return False, new_items
 ```
+
+#### `post_process_output(output, data)`
+
+##### Arguments
+
+| Name   | Type | Description                                                              |
+|--------|------|--------------------------------------------------------------------------|
+| output | str  | the full output string from the helm template command and the generators |
+| data   | dict | the uumpa argocd plugin data                                             |
+
+##### Process
+
+This function allows to modify the output before it's returned to the caller. It will be called if it's implemented by
+the plugin, and if the plugin yielded at least one item from the `process_generator` function.
+
+The function should return the modified output string.
 
 #### `run_generator_job(tmpdir, env)`
 

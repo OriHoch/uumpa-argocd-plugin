@@ -246,3 +246,194 @@ Runs a script using the same image and configuration as the Uumpa argocd plugin 
 | env                    | {key: value} env vars for the script, value prefixed with FILE:: will save to file mode 0400 and provide the path | -                                  |
 | generators             | List of generators to run after the job completed                                                                 | -                                  |
 | generators[].if        | Has access to additional variable: `_job_status` with values: "skip", "success", "fail"                           | _job_status in ["skip", "success"] |
+
+## Plugins Development
+
+Plugins are Python packages which expose the following functions:
+
+#### `process_value(key, value, data)`
+
+##### Arguments
+
+| Name      | Type | Description                                               |
+|-----------|------|-----------------------------------------------------------|
+| key       | str  | the key to set in the data                                |
+| value     | str  | a dict containing the value definition (plugin dependant) |
+| data      | dict | the uumpa argocd plugin data                              |
+
+##### Process
+
+The function should set the key in the data dict to the given value, after processing it.
+
+It has no return value.
+
+##### Examples
+
+Get a value and set it in the data dict: 
+
+```python
+import os
+import uumpa_argocd_plugin.common
+
+def get_value_from_server(object_name):
+    # do something to get the value of object_name from a server
+    # You can use env vars here to get the server URL / credentials
+    # this env var will need to be set on the sidecar container
+    os.environ.get('MY_SERVER_CREDENTIALS')
+    # this env var can also be set in the argocd app definition
+    os.environ.get('ARGOCD_ENV_MY_SERVER_URL')
+    # get the value from the server and return it
+    return "my-value"
+
+def process_value(key, value, data):
+    # the common.render function should be called to in process_value functions to support variable substitutions
+    object_name = uumpa_argocd_plugin.common.render(value["object_name"], data)
+    data[key] = get_value_from_server(value["object_name"])
+```
+
+Another common use-case is to get multiple values from an object like a secret or configmap:
+
+```python
+def process_value(key, value, data):
+    # this will get the namespace name from either the data value or from the current app namespace
+    namespace = common.render(value.get('namespace') or data['__namespace_name'], data)
+    secret_name = common.render(value['name'], data)
+    secret_data = get_secret(namespace, secret_name)
+    # now we have a dict containing key/value pairs from the secret
+    # the common.process_keyed_value allows to set either the whole dict, subset of keys or a single key
+    # depending on the value attributes `key` / `keys` - see the documentation for `secret` / `configmap` types for details
+    common.process_keyed_value(secret_data, key, value, data)
+```
+
+#### `process_generator(generator, data)`
+
+##### Arguments
+
+| Name      | Type | Description                  |
+|-----------|------|------------------------------|
+| generator | dict | the generator definition     |
+| data      | dict | the uumpa argocd plugin data |
+
+##### Proess
+
+The function should yield `dict` items which can be either Kubernetes objects or other generators.
+
+Kubernetes objects need to be yielded as a dict containing the Kubernetes object definition.
+
+Generators need to be yielded as a dict containing a single attribute `generator` which contains the generator definition.
+
+Generators should not modify the `data` dict, and can assume all values are already rendered, so no need to call
+`common.render` on them like in the `process_value` function.
+
+##### Example
+
+```python
+def process_generator(generator, data):
+    # checking the type is optional, only in case your plugin supports different generator types
+    if generator["type"] == "my-special-type":
+        # yield a Kubernetes Object 
+        yield {
+            "apiVersion": "v1",
+            "kind": "ConfigMap",
+            "metadata": {
+                # This will use either the namespace from the generator or the current app namespace
+                "namespace": generator.get('namespace') or data['__namespace_name'],
+                # in this example the name must be specified on the generator
+                "name": generator["name"],
+            },
+            "data": {
+                # my-value will need to be set in the uumpa_data.yaml file
+                "my-key": data['my-value'],
+            },
+        }
+        # yield another generator which will be processed after this one
+        yield {
+          "generator": {
+              "plugin": "my_plugin_library.my_plugin",
+              "name": data["my-name"]
+          },
+        }
+```
+
+#### `post_process_generator_items(items, data)`
+
+##### Arguments
+
+| Name   | Type | Description                        |
+|--------|------|------------------------------------|
+| items  | list | list of items which were generated |
+| data   | dict | the uumpa argocd plugin data       |
+
+##### Process
+
+This function allows to modify the generated items before they are returned to the caller.
+
+Common use cases are to do bulk processing of multiple generator items, or to delete / modify items.
+
+it returns a tuple (`is_changed`, `items`), where `is_changed` is a boolean indicating if the items were changed,
+and `items` is a list of items which will be returned to the caller.
+
+##### Example
+
+This examples shows how to do bulk processing:
+
+```python
+# this process_generator function only yields an item which will be identified by the post_process_generator_items function
+def process_generator(generator, data):
+    yield {'__my_identifier': 'my_generator', 'generator': generator}
+
+def post_process_generator_items(items, data):
+    # we first need to filter out the items which were generated by this generator
+    new_items, my_generators = [], []
+    for item in items:
+        # we can use the __my_identifier attribute to identify our generators
+        if item.get('__my_identifier') == 'my_generator':
+            my_generators.append(item['generator'])
+        else:
+            new_items.append(item)
+    if len(my_generators) > 0:
+        # now we can append a single item which will do the processing for all my_generators
+        new_items.append(get_my_item(my_generators, data))
+        # return True to indicate that the items were changed
+        return True, new_items
+    else:
+        # return False to indicate that the items were not changed
+        return False, new_items
+```
+
+#### `run_generator_job(tmpdir, env)`
+
+##### Arguments
+
+| Name   | Type | Description                                                                                      |
+|--------|------|--------------------------------------------------------------------------------------------------|
+| tmpdir | str  | path to a temporary directory which will contain the job files, can use it also for temp storage |
+| env    | dict | env vars which can be used by the job                                                            |
+
+##### Process
+
+This function depensd on the jobs core generator to allow plugins to run python code or scripts.
+
+##### Example
+
+```python
+# the plugin generator yields a job generator
+def process_generator(generator, data):
+    # yield a job generator, see the core generators documentation for jobs for more details
+    yield {'generator': {
+        'type': 'job',
+        'name': 'my_task',
+        # the plugin package and function name to run (it's not strictly required to be called run_generator_job)
+        'python-module-function': 'my_plugin:run_generator_job',
+        'env': {
+            # this env var will be available to the job, env vars must be strings so we need to serialize it
+            'MY_GENERATOR_JSON': json.dumps(generator)
+        }
+    }}
+
+# here the plugin runs the job which will be called by the job generator
+def run_generator_job(tmpdir, env):
+    # get the generator from the env var
+    generator = json.loads(env['MY_GENERATOR_JSON'])
+    # do something with the generator
+```

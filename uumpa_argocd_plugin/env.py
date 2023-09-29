@@ -11,7 +11,7 @@ def update_env(chart_path):
                 if env_var.get('valueIf'):
                     assert not env_var.get('value')
                     for if_, value in env_var['valueIf'].items():
-                        if eval(env_var['valueIf'], {}, os.environ):
+                        if eval(if_, {}, os.environ):
                             os.environ['ARGOCD_ENV_' + env_var['name']] = value
                             break
                 else:

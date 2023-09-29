@@ -164,13 +164,15 @@ uumpa-argocd-plugin local-run-jobs NAMESPACE_NAME /path/to/chart [--dry-run]
 
 ### Environment variables
 
-| Name                               | Description                                                    | Default               |
-|------------------------------------|----------------------------------------------------------------|-----------------------|
-| ARGOCD_ENV_UUMPA_DATA_CONFIG       | Path to the data config file relative to the helm chart root   | uumpa_data.yaml       |
-| ARGOCD_ENV_UUMPA_GENERATORS_CONFIG | Path to the hooks config file relative to the helm chart root  | uumpa_generators.yaml |
-| ARGOCD_NAMESPACE                   | Namespace of the ArgoCD application, used to create jobs       | argocd                |
-| ARGOCD_REPO_SERVER_DEPLOYMENT      | Name of the ArgoCD repo server deployment, used to create jobs | argocd-repo-server    |
-| ARGOCD_UUMPA_PLUGIN_CONTAINER      | Name of the plugin sidecar container, used to create jobs      | uumpa                 |
+| Name                                  | Description                                                    | Default               |
+|---------------------------------------|----------------------------------------------------------------|-----------------------|
+| ARGOCD_ENV_UUMPA_DATA_CONFIG          | Path to the data config file relative to the helm chart root   | uumpa_data.yaml       |
+| ARGOCD_ENV_UUMPA_GENERATORS_CONFIG    | Path to the hooks config file relative to the helm chart root  | uumpa_generators.yaml |
+| ARGOCD_NAMESPACE                      | Namespace of the ArgoCD application, used to create jobs       | argocd                |
+| ARGOCD_REPO_SERVER_DEPLOYMENT         | Name of the ArgoCD repo server deployment, used to create jobs | argocd-repo-server    |
+| ARGOCD_UUMPA_PLUGIN_CONTAINER         | Name of the plugin sidecar container, used to create jobs      | uumpa                 |
+| ARGOCD_UUMPA_GLOBAL_DATA_CONFIG       | Absolute path to a global data config file                     | -                     |
+| ARGOCD_UUMPA_GLOBAL_GENERATORS_CONFIG | Absolute path to a global generators config file               | -                     |
 
 ### Common attributes
 

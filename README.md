@@ -22,6 +22,8 @@ Enable the plugin in the ArgoCD application spec by adding the plugin section un
         # these env vars can be used later
         - name: ALERTMANAGER_USER
           value: admin
+        - name: ENVIRONMENT
+          value: staging
         # this is a core env var which allows to add arguments to the helm template command
         - name: HELM_ARGS
           value: --include-crds --values my-values.yaml
@@ -35,6 +37,11 @@ You can define additional env vars in the chart path at `uumpa_env.yaml`, for ex
 # similar to how the plugin env vars are defined in the ArgoCD app spec - the name will be prefixed with ARGOCD_ENV_
 - name: DOMAIN_SUFFIX
   value: example.com
+# can also define values based on other env vars which were set either globally or in the app spec
+- name: HELM_ARGS
+  valueIf:
+    "ARGOCD_ENV_ENVIRONMENT == 'staging'": -f values.staging.yaml
+    "ARGOCD_ENV_ENVIRONMENT == 'production'": -f values.production.yaml
 ```
 
 The basic functionality allows to get values from different sources and use them in the Helm chart, this is done

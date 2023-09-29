@@ -8,6 +8,13 @@ def update_env(chart_path):
     if os.path.exists(env_path):
         with open(env_path) as f:
             for env_var in common.yaml_load(f):
-                os.environ[env_var['name']] = env_var.get('value') or ''
+                if env_var.get('valueIf'):
+                    assert not env_var.get('value')
+                    for if_, value in env_var['valueIf'].items():
+                        if eval(env_var['valueIf'], {}, os.environ):
+                            os.environ[env_var['name']] = value
+                            break
+                else:
+                    os.environ[env_var['name']] = env_var.get('value') or ''
     for k, v in config.get_argocd_app_spec_env_vars().items():
         setattr(config, k, v)

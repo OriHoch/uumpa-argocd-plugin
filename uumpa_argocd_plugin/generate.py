@@ -1,10 +1,11 @@
 import os
 import subprocess
 
-from . import data, common, generators
+from . import data, common, generators, env
 
 
 def generate_local(namespace_name, chart_path, *helm_args, only_generators=False):
+    env.update_env(chart_path)
     if only_generators:
         assert not helm_args
     data_ = data.process(namespace_name, chart_path)
@@ -27,6 +28,7 @@ def post_process_output(output, data_):
 
 def generate_argocd():
     chart_path = os.getcwd()
+    env.update_env(chart_path)
     app_name = os.environ['ARGOCD_APP_NAME']
     namespace_name = os.environ['ARGOCD_APP_NAMESPACE']
     kube_version = os.environ.get('KUBE_VERSION')

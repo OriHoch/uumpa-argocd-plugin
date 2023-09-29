@@ -1,8 +1,7 @@
 import os
-import json
 import importlib
 
-from . import config, common
+from . import config, common, env
 
 
 def process_generator(generator, data_, loaded_modules):
@@ -55,6 +54,7 @@ def iterate_process_generators(chart_path, data_, loaded_modules):
 
 def process(data_):
     chart_path = data_['__chart_path']
+    env.update_env(chart_path)
     loaded_modules = set()
     for item in post_process_generator_items(iterate_process_generators(chart_path, data_, loaded_modules), data_, loaded_modules):
         yield common.yaml_dump_dict(item)

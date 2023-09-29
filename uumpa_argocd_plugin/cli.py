@@ -1,6 +1,6 @@
 import sys
 
-from . import generate, jobs
+from . import generate, jobs, init
 
 
 def main():
@@ -11,9 +11,13 @@ def main():
         generate.generate_local(*args, only_generators=True)
     elif cmd == 'local-run-jobs':
         jobs.run_local(*args)
+    elif cmd == 'local-init':
+        init.init_local(*args)
     elif cmd == 'generate':
         generate.generate_argocd()
     elif cmd == 'run-generator-job':
         jobs.run_argocd(*args)
+    elif cmd == 'init':
+        init.init_argocd()
     else:
         raise ValueError(f'Unknown command {cmd}')

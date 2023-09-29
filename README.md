@@ -18,15 +18,24 @@ Enable the plugin in the ArgoCD application spec by adding the plugin section un
     plugin:
       name: uumpa
       env:
-        # optional arguments to pass to the helm template command
-        - name: HELM_ARGS
-          value: --include-crds --values my-values.yaml
-        # optional env vars which are available to be used later
+        # optional env vars which ArgoCD will define with `ARGOCD_ENV_` prefix
+        # these env vars can be used later
         - name: ALERTMANAGER_USER
           value: admin
+        # this is a core env var which allows to add arguments to the helm template command
+        - name: HELM_ARGS
+          value: --include-crds --values my-values.yaml
 ```
 
 The plugin will handle the app as a Helm chart.
+
+You can define additional env vars in the chart path at `uumpa_env.yaml`, for example:
+
+```yaml
+# similar to how the plugin env vars are defined in the ArgoCD app spec - the name will be prefixed with ARGOCD_ENV_
+- name: DOMAIN_SUFFIX
+  value: example.com
+```
 
 The basic functionality allows to get values from different sources and use them in the Helm chart, this is done
 by creating file `uumpa_data.yaml` in the chart root directory:
@@ -164,15 +173,30 @@ uumpa-argocd-plugin local-run-jobs NAMESPACE_NAME /path/to/chart [--dry-run]
 
 ### Environment variables
 
-| Name                                  | Description                                                    | Default               |
-|---------------------------------------|----------------------------------------------------------------|-----------------------|
-| ARGOCD_ENV_UUMPA_DATA_CONFIG          | Path to the data config file relative to the helm chart root   | uumpa_data.yaml       |
-| ARGOCD_ENV_UUMPA_GENERATORS_CONFIG    | Path to the hooks config file relative to the helm chart root  | uumpa_generators.yaml |
-| ARGOCD_NAMESPACE                      | Namespace of the ArgoCD application, used to create jobs       | argocd                |
-| ARGOCD_REPO_SERVER_DEPLOYMENT         | Name of the ArgoCD repo server deployment, used to create jobs | argocd-repo-server    |
-| ARGOCD_UUMPA_PLUGIN_CONTAINER         | Name of the plugin sidecar container, used to create jobs      | uumpa                 |
-| ARGOCD_UUMPA_GLOBAL_DATA_CONFIG       | Absolute path to a global data config file                     | -                     |
-| ARGOCD_UUMPA_GLOBAL_GENERATORS_CONFIG | Absolute path to a global generators config file               | -                     |
+| Name                                  | Description                                                                   | Default               |
+|---------------------------------------|-------------------------------------------------------------------------------|-----------------------|
+| ARGOCD_ENV_UUMPA_DATA_CONFIG          | Path to the data config file relative to the helm chart root                  | uumpa_data.yaml       |
+| ARGOCD_ENV_UUMPA_GENERATORS_CONFIG    | Path to the hooks config file relative to the helm chart root                 | uumpa_generators.yaml |
+| ARGOCD_ENV_UUMPA_ENV_CONFIG           | Path to the env config file relative to the helm chart root                   | uumpa_env.yaml        |
+| ARGOCD_NAMESPACE                      | Namespace of the ArgoCD application, used to create jobs                      | argocd                |
+| ARGOCD_REPO_SERVER_DEPLOYMENT         | Name of the ArgoCD repo server deployment, used to create jobs                | argocd-repo-server    |
+| ARGOCD_UUMPA_PLUGIN_CONTAINER         | Name of the plugin sidecar container, used to create jobs                     | uumpa                 |
+| ARGOCD_UUMPA_GLOBAL_DATA_CONFIG       | Absolute path to a global data config file                                    | -                     |
+| ARGOCD_UUMPA_GLOBAL_GENERATORS_CONFIG | Absolute path to a global generators config file                              | -                     |
+| ARGOCD_ENV_INIT_PLUGIN_FUNCTIONS      | Comma separated list of plugin functions to run on initialization (if needed) | -                     |
+| ARGOCD_ENV_HELM_ARGS                  | Additional arguments to pass to the helm template command                     | -                     |
+
+Env vars prefixed with `ARGOCD_ENV_` must be set in the ArgoCD app spec without this prefix, for example:
+
+```
+  source:
+    plugin:
+      name: uumpa
+      env:
+        # ARGOCD_ENV_HELM_ARGS
+        - name: HELM_ARGS
+          value: --include-crds --values my-values.yaml
+```
 
 ### Common attributes
 
@@ -219,7 +243,7 @@ Generate a httpauth string which can be used for nginx ingress auth
 | user     | Username for the auth string       | -       |
 | password | Password for the auth string       | -       |
 
-## Core generators
+### Core generators
 
 #### `secret` / `configmap`
 
@@ -249,7 +273,33 @@ Runs a script using the same image and configuration as the Uumpa argocd plugin 
 | generators             | List of generators to run after the job completed                                                                 | -                                  |
 | generators[].if        | Has access to additional variable: `_job_status` with values: "skip", "success", "fail"                           | _job_status in ["skip", "success"] |
 
-## Plugins Development
+### Core init functions
+
+#### `init_helm`
+
+Handles helm initialization, it's recommended not to rely on this handle initialization before committing your chart code.
+
+However, if needed, this plugin will run helm initialization base on the following env vars:
+
+| Name                                       | Description                                                   | Default |
+|--------------------------------------------|---------------------------------------------------------------|---------|
+| ARGOCD_ENV_INIT_HELM_DEPENDENCY_BUILD      | Set to "true" to run helm dependency build                    | -       |
+| ARGOCD_ENV_INIT_HELM_DEPENDENCY_BUILD_ARGS | Additional arguments to pass to helm dependency build command | -       |
+
+Example usage:
+
+```
+  source:
+    plugin:
+      name: uumpa
+      env:
+        - name: INIT_PLUGIN_FUNCTIONS
+          value: init_helm
+        - name: INIT_HELM_DEPENDENCY_BUILD
+          value: "true"
+```
+
+### Plugins Development
 
 Plugins are Python packages which expose the following functions:
 

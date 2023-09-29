@@ -167,3 +167,10 @@ def process_generator(generator, data_):
             yield from globals()[f'process_generator_{type_}'](generator, data_)
     except Exception as e:
         raise Exception(f'generator: {generator}') from e
+
+
+def init_helm(chart_path):
+    if os.environ.get('ARGOCD_ENV_INIT_HELM_DEPENDENCY_BUILD') == "true":
+        print("Running helm dependency build")
+        helm_args = os.environ.get('ARGOCD_ENV_INIT_HELM_DEPENDENCY_BUILD_ARGS') or ''
+        subprocess.check_call(f'helm dependency build {chart_path} {helm_args}', shell=True)

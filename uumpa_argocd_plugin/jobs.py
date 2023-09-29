@@ -9,7 +9,7 @@ import subprocess
 
 from ruamel.yaml import safe_load
 
-from . import data, generators, common
+from . import data, generators, common, env
 
 
 def dry_run_print_dir(tmpdir):
@@ -97,6 +97,7 @@ def _run_job(job, job_files_b64, generator, data_, dry_run=False):
 
 
 def run_local(namespace_name, chart_path, *args):
+    env.update_env(chart_path)
     dry_run = '--dry-run' in args
     data_ = data.process(namespace_name, chart_path)
     job_files_b64 = {}

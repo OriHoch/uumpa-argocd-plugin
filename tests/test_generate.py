@@ -21,9 +21,10 @@ def test_generate_local():
         try:
             with patch('subprocess.check_output', return_value='kind: Mock\n---\nkind: Mock2\n') as mock_check_output:
                 generate.generate_local('my_namespace', tmpdir, '--include-crds')
-                mock_check_output.assert_called_once_with([
-                    'helm', 'template', '.', '--namespace', 'my_namespace', '--include-crds'
-                ], text=True, cwd=tmpdir)
+                mock_check_output.assert_called_once_with(
+                    'helm template . --namespace my_namespace --include-crds',
+                    shell=True, text=True, cwd=tmpdir
+                )
         finally:
             sys.stdout = old_stdout
         new_stdout.seek(0)

@@ -13,7 +13,7 @@ def generate_local(namespace_name, chart_path, *helm_args, only_generators=False
         *generators.process(data_)
     ]
     if not only_generators:
-        output.append(subprocess.check_output(['helm', 'template', '.', '--namespace', namespace_name, *helm_args], text=True, cwd=chart_path))
+        output.append(subprocess.check_output(f'helm template . --namespace {namespace_name} {" ".join(helm_args)}', shell=True, text=True, cwd=chart_path))
     output = common.render('\n---\n'.join(output), data_)
     output = post_process_output(output, data_)
     print(output)

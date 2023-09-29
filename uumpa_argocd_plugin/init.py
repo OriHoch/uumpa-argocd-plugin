@@ -7,7 +7,7 @@ from . import config, env
 def process_init_plugin_function(init_plugin_function, chart_path):
     print(f'process_init_plugin_function: {init_plugin_function}')
     if '.' not in init_plugin_function and ':' not in init_plugin_function:
-        init_plugin_function = f'uumpa_argocd_plugin.core.{init_plugin_function}'
+        init_plugin_function = f'uumpa_argocd_plugin.core:{init_plugin_function}'
     module, function = init_plugin_function.split(':')
     getattr(importlib.import_module(module), function)(chart_path)
 

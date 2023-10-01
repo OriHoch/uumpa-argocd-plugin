@@ -3,11 +3,11 @@
 ## Install
 
 * Add the plugin sidecar to the argocd-repo-server deployment, 
-  see [manifests/patch-argocd-repo-server-deployment.yaml](manifests/patch-argocd-repo-server-deployment.yaml)
+  see [kustomize/install/patch-argocd-repo-server-deployment.yaml](kustomize/install/patch-argocd-repo-server-deployment.yaml)
   for details, if you are using Kustomize you can use that file as a base for a strategic merge patch.
-* Add the plugin configuration - [manifests/uumpa-plugin-configmap.yaml](manifests/uumpa-plugin-configmap.yaml), for
+* Add the plugin configuration - [kustomize/install/uumpa-plugin-configmap.yaml](kustomize/install/uumpa-plugin-configmap.yaml), for
   most common use-cases you will not need to modify it.
-* Add rbac to allow the plugin to access the cluster - [manifests/uumpa-plugin-rbac.yaml](manifests/uumpa-plugin-rbac.yaml).
+* Add rbac to allow the plugin to access the cluster - [kustomize/install/uumpa-plugin-rbac.yaml](kustomize/install/uumpa-plugin-rbac.yaml).
 
 ## Usage
 
@@ -37,7 +37,12 @@ You can define additional env vars in the chart path at `uumpa_env.yaml`, for ex
 # similar to how the plugin env vars are defined in the ArgoCD app spec - the name will be prefixed with ARGOCD_ENV_
 - name: DOMAIN_SUFFIX
   value: example.com
+# can set default values for env vars which will be set only if they are not already set
+- name: ENVIRONMENT
+  # this ensures that we can use this env var in later conditionals even if it's not set
+  defaultValue: ""
 # can also define values based on other env vars which were set either globally or in the app spec
+# note that the values set here will override any values set in the app spec (but only if the relevant condition is met)
 - name: HELM_ARGS
   valueIf:
     "ARGOCD_ENV_ENVIRONMENT == 'staging'": -f values.staging.yaml

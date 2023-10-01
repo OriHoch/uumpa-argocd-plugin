@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tests-base-production
+spec:
+  project: default
+  destination:
+    namespace: tests-base-production
+    server: 'https://kubernetes.default.svc'
+  source:
+    repoURL: https://github.com/OriHoch/uumpa-argocd-plugin.git
+    targetRevision: main
+    path: tests/apps/base
+    plugin:
+      name: uumpa
+      env:
+        - name: ALERTMANAGER_USER
+          value: admin
+        - name: ENVIRONMENT
+          value: production
+        - name: HELM_ARGS
+          value: --values my-values.yaml --values my-other-values.yaml
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

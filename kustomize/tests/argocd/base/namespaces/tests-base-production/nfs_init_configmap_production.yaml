@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nfs-init
+  namespace: tests-base-production
+data:
+  initialized: ""

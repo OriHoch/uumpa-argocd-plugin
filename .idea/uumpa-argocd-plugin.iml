@@ -4,6 +4,7 @@
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/.pytest_cache" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
+      <excludeFolder url="file://$MODULE_DIR$/uumpa_argocd_plugin.egg-info" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.10 (uumpa-argocd-plugin)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: argocd-repo-server
+spec:
+  template:
+    spec:
+      containers:
+        - name: uumpa
+          image: ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest
+          env:
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            - name: DOMAIN_SUFFIX
+              value: "global.example.com"
+          volumeMounts:
+            - mountPath: /srv
+              name: uumpa-argocd-plugin
+      volumes:
+        - name: uumpa-argocd-plugin
+          hostPath:
+            path: /uumpa-argocd-plugin

@@ -1,0 +1,30 @@
+- alertmanager_user: ~ARGOCD_ENV_ALERTMANAGER_USER~
+  domain_suffix_global: ~DOMAIN_SUFFIX~
+  domain_suffix_local: ~ARGOCD_ENV_DOMAIN_SUFFIX~
+  alertmanager_domain: alertmanager.~domain_suffix_local~
+  nfs_ip:
+    type: secret
+    namespace: default
+    name: nfs
+    key: ip
+  alertmanager_secret:
+    type: secret
+    name: alertmanager-httpauth
+    keys: [auth, password]
+- if: not alertmanager_secret.auth or not alertmanager_secret.password
+  alertmanager_secret.auth:
+    type: httpauth
+    user: ~alertmanager_user~
+    password: ~alertmanager_secret.password~
+  alertmanager_secret.password:
+    type: password
+    length: 18
+- nfs_initialized:
+    type: configmap
+    name: nfs-init
+    key: initialized
+- user.name: admin
+  user.password:
+    type: password
+    length: 18
+- user_auth: ~user.name~:~user.password~

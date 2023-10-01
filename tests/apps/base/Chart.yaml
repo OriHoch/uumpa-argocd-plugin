@@ -1,0 +1,8 @@
+name: tests-base
+version: "0.0.0"
+apiVersion: v2
+
+dependencies:
+  - name: testdep
+    version: "0.0.0"
+    repository: file://testdep

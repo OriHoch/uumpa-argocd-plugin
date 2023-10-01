@@ -1,0 +1,6 @@
+dependencies:
+- name: testdep
+  repository: file://testdep
+  version: 0.0.0
+digest: sha256:ba9dc903db730d57a3c9ee1b679e7dedb1bddef409b8119a8fb442a442b64cc0
+generated: "2023-09-29T19:05:12.764915355+03:00"

@@ -1,0 +1,12 @@
+- name: DOMAIN_SUFFIX
+  value: local.example.com
+- name: HELM_ARGS
+  valueIf:
+    "ARGOCD_ENV_ENVIRONMENT == 'staging'": -f values.staging.yaml
+    "ARGOCD_ENV_ENVIRONMENT == 'production'": -f values.production.yaml
+- name: INIT_PLUGIN_FUNCTIONS
+  valueIf:
+    "ARGOCD_ENV_ENVIRONMENT == 'staging'": init_helm
+- name: INIT_HELM_DEPENDENCY_BUILD
+  valueIf:
+    "ARGOCD_ENV_ENVIRONMENT == 'staging'": "true"

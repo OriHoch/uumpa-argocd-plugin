@@ -1,0 +1,20 @@
+- type: secret
+  name: alertmanager-httpauth
+  data:
+      auth: ~alertmanager_secret.auth~
+      user: ~alertmanager_user~
+      password: ~alertmanager_secret.password~
+- if: not nfs_initialized
+  type: job
+  hook: PreSync
+  hook-delete-policy: BeforeHookCreation
+  name: nfs-init
+  script: init.sh
+  env:
+    NSF_IP: ~nfs_ip~
+    NFS_ID_RSA: FILE::~nfs_id_rsa~
+  generators:
+    - type: configmap
+      name: nfs-init
+      data:
+        initialized: "true"

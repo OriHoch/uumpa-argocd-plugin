@@ -3,9 +3,6 @@ kind: Kustomization
 
 resources:
   - ../../../install
-  - app.yaml
-  - app_production.yaml
-  - app_staging.yaml
 
 patchesStrategicMerge:
   - patch-argocd-repo-server-deployment.yaml

@@ -31,6 +31,10 @@ def wait_for_argocd_repo_server():
     wait_for(check_argocd_repo_server, 120, 'argocd-repo-server did not start')
 
 
+def wait_for_argocd_crds():
+    wait_for(lambda: 'applications.argoproj.io' in subprocess.check_output('kubectl api-resources -o name', shell=True).decode('utf-8'), 120, 'argocd CRDs did not install')
+
+
 def install_argocd(argocd_kustomize_dir):
     subprocess.run(['kubectl', 'apply', '-f', '-'], text=True, check=True, input=json.dumps({
         "apiVersion": "v1",
@@ -39,6 +43,7 @@ def install_argocd(argocd_kustomize_dir):
     }))
     subprocess.check_call(['kubectl', 'apply', '-n', 'argocd', '-k', os.path.join('kustomize', 'tests', 'argocd', argocd_kustomize_dir)])
     wait_for_argocd_repo_server()
+    wait_for_argocd_crds()
     for path in glob.glob(os.path.join('kustomize', 'tests', 'argocd', argocd_kustomize_dir, 'namespaces', '*')):
         namespace = path.split('/')[-1]
         if namespace != "default":

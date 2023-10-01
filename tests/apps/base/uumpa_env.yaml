@@ -1,11 +1,11 @@
+- name: ENVIRONMENT
+  defaultValue: ""
 - name: DOMAIN_SUFFIX
   value: local.example.com
 - name: HELM_ARGS
   valueIf:
     "ARGOCD_ENV_ENVIRONMENT == 'staging'": -f values.staging.yaml
     "ARGOCD_ENV_ENVIRONMENT == 'production'": -f values.production.yaml
-- name: ENVIRONMENT
-  defaultValue: ""
 - name: INIT_PLUGIN_FUNCTIONS
   valueIf:
     "ARGOCD_ENV_ENVIRONMENT == 'staging'": init_helm

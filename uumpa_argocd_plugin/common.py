@@ -33,6 +33,7 @@ def render_string(v):
 def render(value, data_):
     for k, v in {**os.environ, **data_}.items():
         if isinstance(v, dict):
+            value = value.replace(f'~{k}~', json.dumps(v))
             for k2, v2 in v.items():
                 value = value.replace(f'~{k}.{k2}~', render_string(v2))
         else:

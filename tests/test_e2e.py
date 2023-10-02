@@ -73,4 +73,43 @@ def test():
     wait_for_argocd_app_synced('tests-base')
     wait_for_argocd_app_synced('tests-base-production')
     wait_for_argocd_app_synced('tests-base-staging')
+    actual_configmap = json.loads(subprocess.check_output('kubectl -n tests-base get configmap main-app-config -o json', shell=True))['data']
+    alertmanager_secret_auth_user, alertmanager_secret_auth_encrypted_password = actual_configmap['alertmanager_secret.auth'].split(':')
+    assert alertmanager_secret_auth_user == 'admin'
+    assert len(alertmanager_secret_auth_encrypted_password) > 10
+    alertmanager_secret_json = actual_configmap['alertmanager_secret']
+    alertmanager_secret = json.loads(alertmanager_secret_json)
+    alertmanager_secret_password = actual_configmap['alertmanager_secret.password']
+    assert alertmanager_secret == {
+        "auth": f"{alertmanager_secret_auth_user}:{alertmanager_secret_auth_encrypted_password}",
+        "password": alertmanager_secret_password
+    }
+    user_json = actual_configmap['user']
+    user = json.loads(user_json)
 
+    expected_configmap = {
+        'ARGOCD_ENV_ALERTMANAGER_USER': 'admin',
+        'ARGOCD_ENV_DOMAIN_SUFFIX': 'local.example.com',
+        'ARGOCD_ENV_ENVIRONMENT': '',
+        'ARGOCD_ENV_HELM_ARGS': '--values my-values.yaml --values my-other-values.yaml',
+        'ARGOCD_ENV_INIT_HELM_DEPENDENCY_BUILD': '~ARGOCD_ENV_INIT_HELM_DEPENDENCY_BUILD~',
+        'ARGOCD_ENV_INIT_PLUGIN_FUNCTIONS': '~ARGOCD_ENV_INIT_PLUGIN_FUNCTIONS~',
+        'DOMAIN_SUFFIX': 'global.example.com',
+        'alertmanager_domain': 'alertmanager.local.example.com',
+        'alertmanager_secret': alertmanager_secret_json,
+        'alertmanager_secret.auth': f'{alertmanager_secret_auth_user}:{alertmanager_secret_auth_encrypted_password}',
+        'alertmanager_secret.password': alertmanager_secret_password,
+        'alertmanager_user': 'admin',
+        'domain_suffix_global': 'global.example.com',
+        'domain_suffix_local': 'local.example.com',
+        'helm_values_hello': 'world',
+        'helm_values_world': 'hello',
+        'nfs_initialized': '',
+        'nfs_ip': '1.2.3.4',
+        'server': '',
+        'user': '~user~',
+        'user.name': 'admin',
+        'user.password': user['password'],
+        'user_auth': f'admin:{user["password"]}'
+    }
+    assert actual_configmap == expected_configmap

@@ -13,6 +13,7 @@ spec:
               value: "1"
             - name: DOMAIN_SUFFIX
               value: "global.example.com"
+# following lines are for local development, if you want to test the specific image, remove them  ---snip---
           volumeMounts:
             - mountPath: /srv
               name: uumpa-argocd-plugin

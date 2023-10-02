@@ -55,7 +55,7 @@ def install_argocd(argocd_kustomize_dir):
         if os.path.exists(os.path.join(path, 'kustomization.yaml')):
             subprocess.check_call(['kubectl', 'apply', '-n', namespace, '-k', path])
     for path in glob.glob(os.path.join('kustomize', 'tests', 'argocd', argocd_kustomize_dir, 'apps', '*.yaml')):
-        subprocess.check_call(['kubectl', 'apply', '-f', path])
+        subprocess.check_call(['kubectl', 'apply', '-n', 'argocd', '-f', path])
 
 
 def check_argocd_app_synced(app_name):

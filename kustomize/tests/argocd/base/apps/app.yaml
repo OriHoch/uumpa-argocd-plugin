@@ -18,7 +18,3 @@ spec:
           value: admin
         - name: HELM_ARGS
           value: --values my-values.yaml --values my-other-values.yaml
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true

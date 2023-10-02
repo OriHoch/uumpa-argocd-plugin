@@ -17,11 +17,13 @@ data:
   domain_suffix_local: "~domain_suffix_local~"
   alertmanager_domain: "~alertmanager_domain~"
   nfs_ip: "~nfs_ip~"
-  alertmanager_secret: "~alertmanager_secret~"
+  alertmanager_secret: |
+    ~alertmanager_secret~
   alertmanager_secret.auth: "~alertmanager_secret.auth~"
   alertmanager_secret.password: "~alertmanager_secret.password~"
   nfs_initialized: "~nfs_initialized~"
-  user: "~user~"
+  user: |
+    ~user~
   user.name: "~user.name~"
   user.password: "~user.password~"
   user_auth: "~user_auth~"

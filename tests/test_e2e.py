@@ -62,7 +62,9 @@ def check_argocd_app_synced(app_name):
     return json.loads(subprocess.check_output(f'argocd --core app get -o json {app_name}', shell=True))['status']['sync']['status'] == 'Synced'
 
 
-def wait_for_argocd_app_synced(app_name):
+def argocd_app_hard_refresh_sync(app_name):
+    subprocess.check_call(f'argocd --core app diff {app_name} --hard-refresh', shell=True)
+    subprocess.check_call(f'argocd --core app sync {app_name}', shell=True)
     check = functools.partial(check_argocd_app_synced, app_name)
     wait_for(check, 240, f'argocd app {app_name} did not sync')
 
@@ -70,9 +72,9 @@ def wait_for_argocd_app_synced(app_name):
 def test():
     install_argocd('base')
     subprocess.check_call('kubectl config set-context --current --namespace=argocd', shell=True)
-    wait_for_argocd_app_synced('tests-base')
-    wait_for_argocd_app_synced('tests-base-production')
-    wait_for_argocd_app_synced('tests-base-staging')
+    argocd_app_hard_refresh_sync('tests-base')
+    argocd_app_hard_refresh_sync('tests-base-production')
+    argocd_app_hard_refresh_sync('tests-base-staging')
     actual_configmap = json.loads(subprocess.check_output('kubectl -n tests-base get configmap main-app-config -o json', shell=True))['data']
     alertmanager_secret_auth_user, alertmanager_secret_auth_encrypted_password = actual_configmap['alertmanager_secret.auth'].split(':')
     assert alertmanager_secret_auth_user == 'admin'

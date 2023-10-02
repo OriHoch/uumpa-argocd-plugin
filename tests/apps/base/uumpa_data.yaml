@@ -11,14 +11,14 @@
     type: secret
     name: alertmanager-httpauth
     keys: [auth, password]
-- if: not alertmanager_secret.auth or not alertmanager_secret.password
-  alertmanager_secret.auth:
-    type: httpauth
-    user: ~alertmanager_user~
-    password: ~alertmanager_secret.password~
-  alertmanager_secret.password:
-    type: password
-    length: 18
+#- if: not alertmanager_secret.auth or not alertmanager_secret.password
+#  alertmanager_secret.auth:
+#    type: httpauth
+#    user: ~alertmanager_user~
+#    password: ~alertmanager_secret.password~
+#  alertmanager_secret.password:
+#    type: password
+#    length: 18
 - nfs_initialized:
     type: configmap
     name: nfs-init

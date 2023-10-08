@@ -2,8 +2,10 @@ import os
 import time
 import glob
 import json
+import base64
 import functools
 import subprocess
+import contextlib
 
 
 def wait_for(check, seconds, msg='Timeout expired'):
@@ -63,55 +65,77 @@ def check_argocd_app_synced(app_name):
 
 
 def argocd_app_hard_refresh_sync(app_name):
-    subprocess.check_call(f'argocd --core app diff {app_name} --hard-refresh', shell=True)
-    subprocess.check_call(f'argocd --core app sync {app_name}', shell=True)
+    subprocess.check_call(f'argocd app diff --hard-refresh --exit-code=false {app_name}', shell=True)
+    subprocess.check_call(f'argocd app sync {app_name}', shell=True)
     check = functools.partial(check_argocd_app_synced, app_name)
     wait_for(check, 240, f'argocd app {app_name} did not sync')
 
 
+@contextlib.contextmanager
+def argocd_login():
+    subprocess.check_call('kubectl config set-context --current --namespace=argocd', shell=True)
+    if os.environ.get('ARGOCD_PORT_FORWARD_PORT'):
+        port = os.environ['ARGOCD_PORT_FORWARD_PORT']
+        port_forward = None
+    else:
+        port = '8080'
+        port_forward = subprocess.Popen('kubectl port-forward svc/argocd-server -n argocd 8080:443', shell=True)
+    try:
+        password = base64.b64decode(
+            json.loads(
+                subprocess.check_output('kubectl get secret argocd-initial-admin-secret -o json', shell=True)
+            )['data']['password'].encode()
+        ).decode()
+        subprocess.check_call(f'argocd login --insecure localhost:{port} --username admin --password {password}', shell=True)
+        yield
+    finally:
+        if port_forward:
+            port_forward.terminate()
+
+
 def test():
     install_argocd('base')
-    subprocess.check_call('kubectl config set-context --current --namespace=argocd', shell=True)
-    argocd_app_hard_refresh_sync('tests-base')
-    argocd_app_hard_refresh_sync('tests-base-production')
-    argocd_app_hard_refresh_sync('tests-base-staging')
-    actual_configmap = json.loads(subprocess.check_output('kubectl -n tests-base get configmap main-app-config -o json', shell=True))['data']
-    alertmanager_secret_auth_user, alertmanager_secret_auth_encrypted_password = actual_configmap['alertmanager_secret.auth'].split(':')
-    assert alertmanager_secret_auth_user == 'admin'
-    assert len(alertmanager_secret_auth_encrypted_password) > 10
-    alertmanager_secret_json = actual_configmap['alertmanager_secret']
-    alertmanager_secret = json.loads(alertmanager_secret_json)
-    alertmanager_secret_password = actual_configmap['alertmanager_secret.password']
-    assert alertmanager_secret == {
-        "auth": f"{alertmanager_secret_auth_user}:{alertmanager_secret_auth_encrypted_password}",
-        "password": alertmanager_secret_password
-    }
-    user_json = actual_configmap['user']
-    user = json.loads(user_json)
+    with argocd_login():
+        argocd_app_hard_refresh_sync('tests-base')
+        argocd_app_hard_refresh_sync('tests-base-production')
+        argocd_app_hard_refresh_sync('tests-base-staging')
+        actual_configmap = json.loads(subprocess.check_output('kubectl -n tests-base get configmap main-app-config -o json', shell=True))['data']
+        alertmanager_secret_auth_user, alertmanager_secret_auth_encrypted_password = actual_configmap['alertmanager_secret.auth'].split(':')
+        assert alertmanager_secret_auth_user == 'admin'
+        assert len(alertmanager_secret_auth_encrypted_password) > 10
+        alertmanager_secret_json = actual_configmap['alertmanager_secret']
+        alertmanager_secret = json.loads(alertmanager_secret_json)
+        alertmanager_secret_password = actual_configmap['alertmanager_secret.password']
+        assert alertmanager_secret == {
+            "auth": f"{alertmanager_secret_auth_user}:{alertmanager_secret_auth_encrypted_password}",
+            "password": alertmanager_secret_password
+        }
+        user_json = actual_configmap['user']
+        user = json.loads(user_json)
 
-    expected_configmap = {
-        'ARGOCD_ENV_ALERTMANAGER_USER': 'admin',
-        'ARGOCD_ENV_DOMAIN_SUFFIX': 'local.example.com',
-        'ARGOCD_ENV_ENVIRONMENT': '',
-        'ARGOCD_ENV_HELM_ARGS': '--values my-values.yaml --values my-other-values.yaml',
-        'ARGOCD_ENV_INIT_HELM_DEPENDENCY_BUILD': '~ARGOCD_ENV_INIT_HELM_DEPENDENCY_BUILD~',
-        'ARGOCD_ENV_INIT_PLUGIN_FUNCTIONS': '~ARGOCD_ENV_INIT_PLUGIN_FUNCTIONS~',
-        'DOMAIN_SUFFIX': 'global.example.com',
-        'alertmanager_domain': 'alertmanager.local.example.com',
-        'alertmanager_secret': alertmanager_secret_json,
-        'alertmanager_secret.auth': f'{alertmanager_secret_auth_user}:{alertmanager_secret_auth_encrypted_password}',
-        'alertmanager_secret.password': alertmanager_secret_password,
-        'alertmanager_user': 'admin',
-        'domain_suffix_global': 'global.example.com',
-        'domain_suffix_local': 'local.example.com',
-        'helm_values_hello': 'world',
-        'helm_values_world': 'hello',
-        'nfs_initialized': '',
-        'nfs_ip': '1.2.3.4',
-        'server': '',
-        'user': '~user~',
-        'user.name': 'admin',
-        'user.password': user['password'],
-        'user_auth': f'admin:{user["password"]}'
-    }
-    assert actual_configmap == expected_configmap
+        expected_configmap = {
+            'ARGOCD_ENV_ALERTMANAGER_USER': 'admin',
+            'ARGOCD_ENV_DOMAIN_SUFFIX': 'local.example.com',
+            'ARGOCD_ENV_ENVIRONMENT': '',
+            'ARGOCD_ENV_HELM_ARGS': '--values my-values.yaml --values my-other-values.yaml',
+            'ARGOCD_ENV_INIT_HELM_DEPENDENCY_BUILD': '~ARGOCD_ENV_INIT_HELM_DEPENDENCY_BUILD~',
+            'ARGOCD_ENV_INIT_PLUGIN_FUNCTIONS': '~ARGOCD_ENV_INIT_PLUGIN_FUNCTIONS~',
+            'DOMAIN_SUFFIX': 'global.example.com',
+            'alertmanager_domain': 'alertmanager.local.example.com',
+            'alertmanager_secret': alertmanager_secret_json,
+            'alertmanager_secret.auth': f'{alertmanager_secret_auth_user}:{alertmanager_secret_auth_encrypted_password}',
+            'alertmanager_secret.password': alertmanager_secret_password,
+            'alertmanager_user': 'admin',
+            'domain_suffix_global': 'global.example.com',
+            'domain_suffix_local': 'local.example.com',
+            'helm_values_hello': 'world',
+            'helm_values_world': 'hello',
+            'nfs_initialized': '',
+            'nfs_ip': '1.2.3.4',
+            'server': '',
+            'user': '~user~',
+            'user.name': 'admin',
+            'user.password': user['password'],
+            'user_auth': f'admin:{user["password"]}'
+        }
+        assert actual_configmap == expected_configmap

@@ -64,7 +64,7 @@ def check_argocd_app_synced(app_name):
     return json.loads(subprocess.check_output(f'argocd --core app get -o json {app_name}', shell=True))['status']['sync']['status'] == 'Synced'
 
 
-def argocd_app_hard_refresh_sync(app_name):
+def argocd_app_git_hard_refresh_sync(app_name):
     subprocess.check_call(f'argocd app diff --hard-refresh --exit-code=false {app_name}', shell=True)
     subprocess.check_call(f'argocd app sync {app_name}', shell=True)
     check = functools.partial(check_argocd_app_synced, app_name)
@@ -96,9 +96,9 @@ def argocd_login():
 def test():
     install_argocd('base')
     with argocd_login():
-        argocd_app_hard_refresh_sync('tests-base')
-        argocd_app_hard_refresh_sync('tests-base-production')
-        argocd_app_hard_refresh_sync('tests-base-staging')
+        argocd_app_git_hard_refresh_sync('tests-base')
+        argocd_app_git_hard_refresh_sync('tests-base-production')
+        argocd_app_git_hard_refresh_sync('tests-base-staging')
         actual_configmap = json.loads(subprocess.check_output('kubectl -n tests-base get configmap main-app-config -o json', shell=True))['data']
         alertmanager_secret_auth_user, alertmanager_secret_auth_encrypted_password = actual_configmap['alertmanager_secret.auth'].split(':')
         assert alertmanager_secret_auth_user == 'admin'
@@ -110,9 +110,12 @@ def test():
             "auth": f"{alertmanager_secret_auth_user}:{alertmanager_secret_auth_encrypted_password}",
             "password": alertmanager_secret_password
         }
-        user_json = actual_configmap['user']
+        user_json = actual_configmap.pop('user')
         user = json.loads(user_json)
-
+        assert set(user.keys()) == {'name', 'password'}
+        assert user['name'] == 'admin'
+        assert len(user['password']) > 8
+        assert actual_configmap.pop('nfs_initialized') in {'', 'true'}
         expected_configmap = {
             'ARGOCD_ENV_ALERTMANAGER_USER': 'admin',
             'ARGOCD_ENV_DOMAIN_SUFFIX': 'local.example.com',
@@ -130,10 +133,8 @@ def test():
             'domain_suffix_local': 'local.example.com',
             'helm_values_hello': 'world',
             'helm_values_world': 'hello',
-            'nfs_initialized': '',
             'nfs_ip': '1.2.3.4',
             'server': '',
-            'user': '~user~',
             'user.name': 'admin',
             'user.password': user['password'],
             'user_auth': f'admin:{user["password"]}'

@@ -8,7 +8,7 @@ spec:
     namespace: tests-base-staging
     server: 'https://kubernetes.default.svc'
   source:
-    repoURL: https://github.com/OriHoch/uumpa-argocd-plugin.git
+    repoURL: http://git/git/uumpa-argocd-plugin
     targetRevision: main
     path: tests/apps/base
     plugin:

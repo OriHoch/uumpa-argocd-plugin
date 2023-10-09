@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: git
+  labels:
+      app: git
+spec:
+  selector:
+    matchLabels:
+      app: git
+  template:
+    metadata:
+      labels:
+        app: git
+    spec:
+      containers:
+        - name: git
+          # built from kustomize/tests/argocd/base/git-server
+          image: ghcr.io/orihoch/uumpa-argocd-plugin/git-server:3f1ee8fba97e9240b27bdc8bdc2401da49152db5
+          volumeMounts:
+            - name: uumpa-argocd-plugin
+              mountPath: /git/uumpa-argocd-plugin
+      volumes:
+        - name: uumpa-argocd-plugin
+          hostPath:
+            path: /uumpa-argocd-plugin

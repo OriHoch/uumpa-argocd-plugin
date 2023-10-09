@@ -3,6 +3,8 @@ kind: Kustomization
 
 resources:
   - ../../../install
+  - git-deployment.yaml
+  - git-service.yaml
 
 patchesStrategicMerge:
   - patch-argocd-repo-server-deployment.yaml

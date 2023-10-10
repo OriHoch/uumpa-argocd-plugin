@@ -108,8 +108,23 @@ def argocd_login():
             port_forward.kill()
 
 
+def git_pod_ready():
+    pods = json.loads(subprocess.check_output('kubectl get pods -lapp=git -o json', shell=True))['items']
+    if len(pods) != 1:
+        return False
+    pod = pods[0]
+    if pod['status']['phase'] != 'Running':
+        return False
+    for container in pod['status']['containerStatuses']:
+        if not container['ready']:
+            return False
+    return True
+
+
 def argocd_update_git():
+    wait_for(git_pod_ready, 120, 'git pod did not start')
     subprocess.check_call(['kubectl', 'exec', 'deploy/git', '--', 'bash', '-c', dedent('''
+        rm -rf /git/uumpa-argocd-plugin &&\
         mkdir -p /git/uumpa-argocd-plugin &&\
         cp -r /uumpa-argocd-plugin/* /git/uumpa-argocd-plugin/ &&\
         cd /git/uumpa-argocd-plugin &&\

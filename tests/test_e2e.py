@@ -6,6 +6,7 @@ import base64
 import functools
 import subprocess
 import contextlib
+from textwrap import dedent
 
 
 def wait_for(check, seconds, msg='Timeout expired'):
@@ -79,7 +80,17 @@ def argocd_login():
         port_forward = None
     else:
         port = '8080'
-        port_forward = subprocess.Popen('kubectl port-forward svc/argocd-server -n argocd 8080:443', shell=True)
+        cmd = ['kubectl', 'port-forward', 'svc/argocd-server', '-n', 'argocd', '8080:443']
+        port_forward = None
+        port_forward_exists = False
+        if os.environ.get('ARGOCD_PORT_FORWARD_KEEP'):
+            for line in subprocess.check_output(['ps', 'aux']).decode('utf-8').splitlines():
+                if ' '.join(cmd) in line:
+                    port_forward_exists = True
+                    break
+            if not port_forward_exists:
+                port_forward = subprocess.Popen(cmd, stdout=subprocess.DEVNULL)
+    password = None
     try:
         password = base64.b64decode(
             json.loads(
@@ -89,13 +100,31 @@ def argocd_login():
         subprocess.check_call(f'argocd login --insecure localhost:{port} --username admin --password {password}', shell=True)
         yield
     finally:
-        if port_forward:
-            port_forward.terminate()
+        if os.environ.get('ARGOCD_PORT_FORWARD_KEEP'):
+            print('Keeping port-forward running for debugging')
+            print(f'Login to argocd at http://localhost:{port} with username "admin" and password "{password}"')
+        elif port_forward:
+            print('Killing port-forward, to keep it running set env var ARGOCD_PORT_FORWARD_KEEP=1')
+            port_forward.kill()
+
+
+def argocd_update_git():
+    subprocess.check_call(['kubectl', 'exec', 'deploy/git', '--', 'bash', '-c', dedent('''
+        mkdir -p /git/uumpa-argocd-plugin &&\
+        cp -r /uumpa-argocd-plugin/* /git/uumpa-argocd-plugin/ &&\
+        cd /git/uumpa-argocd-plugin &&\
+        git init -b main &&\
+        git config user.email root@localhost &&\
+        git config user.name root &&\
+        git add . &&\
+        git commit -m "Initial commit"
+    ''')])
 
 
 def test():
     install_argocd('base')
     with argocd_login():
+        argocd_update_git()
         argocd_app_git_hard_refresh_sync('tests-base')
         argocd_app_git_hard_refresh_sync('tests-base-production')
         argocd_app_git_hard_refresh_sync('tests-base-staging')

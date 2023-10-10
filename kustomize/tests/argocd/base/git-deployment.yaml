@@ -19,7 +19,7 @@ spec:
           image: ghcr.io/orihoch/uumpa-argocd-plugin/git-server:3f1ee8fba97e9240b27bdc8bdc2401da49152db5
           volumeMounts:
             - name: uumpa-argocd-plugin
-              mountPath: /git/uumpa-argocd-plugin
+              mountPath: /uumpa-argocd-plugin
       volumes:
         - name: uumpa-argocd-plugin
           hostPath:

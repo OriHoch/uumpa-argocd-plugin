@@ -34,17 +34,23 @@ You can define additional env vars in the chart path at `uumpa_env.yaml`, for ex
 ```yaml
 # similar to how the plugin env vars are defined in the ArgoCD app spec - the name will be prefixed with ARGOCD_ENV_
 - name: DOMAIN_SUFFIX
-  value: example.com
-# can set default values for env vars which will be set only if they are not already set
+  value: local.example.com
+# can set default values which allows to use them env var in later conditionals even if not set elsewhere
+# due to rendering logic, all env vars you want to use must be set, otherwise they will raise an error
 - name: ENVIRONMENT
-  # this ensures that we can use this env var in later conditionals even if it's not set
   defaultValue: ""
-# can also define values based on other env vars which were set either globally or in the app spec
-# note that the values set here will override any values set in the app spec (but only if the relevant condition is met)
+# can define values based on other env vars which were set either globally or in the app spec
+# the values set here will override any values set in the app spec if the relevant condition is met
 - name: HELM_ARGS
   valueIf:
     "ARGOCD_ENV_ENVIRONMENT == 'staging'": -f values.staging.yaml
     "ARGOCD_ENV_ENVIRONMENT == 'production'": -f values.production.yaml
+- name: INIT_PLUGIN_FUNCTIONS
+  valueIf:
+    "ARGOCD_ENV_ENVIRONMENT == 'staging'": init_helm
+- name: INIT_HELM_DEPENDENCY_BUILD
+  valueIf:
+    "ARGOCD_ENV_ENVIRONMENT == 'staging'": "true"
 ```
 
 The basic functionality allows to get values from different sources and use them in the Helm chart, this is done
@@ -54,38 +60,45 @@ by creating file `uumpa_data.yaml` in the chart root directory:
 - # set values from the application spec plugin env vars (they are prefixed with ARGOCD_ENV_ for security reasons)
   alertmanager_user: ~ARGOCD_ENV_ALERTMANAGER_USER~
   # set values from global env vars which can be set on the plugin sidecar container
-  domain_suffix: ~DOMAIN_SUFFIX~
-  # can use dynamic values from other fields as part of strings
-  alertmanager_domain: alertmanager.~domain_suffix~
+  domain_suffix_global: ~DOMAIN_SUFFIX~
+  domain_suffix_local: ~ARGOCD_ENV_DOMAIN_SUFFIX~
+  # can use dynamic values from other fields
+  alertmanager_domain: alertmanager.~domain_suffix_local~
   # set values from secret or configmap
+  # this will set a value from a single key within the secret
   nfs_ip:
     type: secret
     namespace: default
     name: nfs
     key: ip
+  # this will set the entire secret as a key-value map
+  nfs:
+    type: secret
+    namespace: default
+    name: nfs
+  # this will set the specified keys only as a key-value map
   alertmanager_secret:
     type: secret
     name: alertmanager-httpauth
-    # this will set the value as a map of the keys and their values
     keys: [auth, password]
-- # if statement is in Python code which has access to all the data from the previous items as local variables
+- # if statements are Python code which has access to all the data from the previous items as local variables
+  # the specified values will be set only if the condition is met
   if: not alertmanager_secret.auth or not alertmanager_secret.password
-  # generate a password, set it as a value in the alertmanager_secret map object
-  alertmanager_secret.password:
-    type: password
-    length: 18
-  # generate a httpauth string which can be used for nginx ingress auth
-  # can also use values from other fields
+  # generate an httpauth string which can be used for nginx ingress auth
   alertmanager_secret.auth:
     type: httpauth
     user: ~alertmanager_user~
     password: ~alertmanager_secret.password~
+  # generate a password, set it as a value in the alertmanager_secret map object
+  alertmanager_secret.password:
+    type: password
+    length: 18
 - nfs_initialized:
     type: configmap
     name: nfs-init
     key: initialized
-# can also set values to objects, in this case data will contain a user object with name and password fields
-- user.name: admin
+- # can also set values to objects, in this case data will contain a user object with name and password fields
+  user.name: admin
   user.password:
     type: password
     length: 18
@@ -100,28 +113,27 @@ Another useful functionality is the ability to generate additional templates.
 This is done in the `uumpa_generators.yaml` file:
 
 ```yaml
+# create a secret with values from uumpa_data
 - type: secret
   name: alertmanager-httpauth
   data:
       auth: ~alertmanager_secret.auth~
       user: ~alertmanager_user~
       password: ~alertmanager_secret.password~
-- # same as above, will only run based on this condition in Python code
+# run a job to handle more complex logic
+- # the job will run only if this condition is met
   if: not nfs_initialized
-  # creates a job as an argocd hook 
   type: job
   # Following 2 values are the same as the ArgoCD hook attributes, see https://argo-cd.readthedocs.io/en/stable/user-guide/resource_hooks/
   hook: PreSync
-  hook-delete-policy: HookSucceeded
+  hook-delete-policy: BeforeHookCreation
   name: nfs-init
-  # path to the script relative to the chart root
-  # the script will run as an executable, so make sure to add a shebang line
+  # path to the script to run relative to the chart root, script should have a shebang line specifying the interpreter
   script: init.sh
-  # set env vars, allows to use values from the data section
+  # set env vars to be available to the script, allows to use values from the data section
   env:
     NSF_IP: ~nfs_ip~
-    # if value is prefixed with FILE:: the value will be written to a file with the given name in file mode 0400
-    NFS_ID_RSA: FILE::~nfs_id_rsa~
+    NFS_ID_RSA: FILE::~nfs.id_rsa~
   # generators will run after this job completed successfully, or if the job was skipped due to it's if condition
   generators:
     - type: configmap

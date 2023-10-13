@@ -1,5 +1,8 @@
 SNIPPET_SOURCE_FILES = [
     'kustomize/tests/argocd/base/apps/app.yaml',
+    'tests/apps/base/uumpa_env.yaml',
+    'tests/apps/base/uumpa_data.yaml',
+    'tests/apps/base/uumpa_generators.yaml',
 ]
 
 

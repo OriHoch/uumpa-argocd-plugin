@@ -1,7 +1,13 @@
-- name: ENVIRONMENT
-  defaultValue: ""
+# -- START SNIPPET uumpa_env --
+# similar to how the plugin env vars are defined in the ArgoCD app spec - the name will be prefixed with ARGOCD_ENV_
 - name: DOMAIN_SUFFIX
   value: local.example.com
+# can set default values which allows to use them env var in later conditionals even if not set elsewhere
+# due to rendering logic, all env vars you want to use must be set, otherwise they will raise an error
+- name: ENVIRONMENT
+  defaultValue: ""
+# can define values based on other env vars which were set either globally or in the app spec
+# the values set here will override any values set in the app spec if the relevant condition is met
 - name: HELM_ARGS
   valueIf:
     "ARGOCD_ENV_ENVIRONMENT == 'staging'": -f values.staging.yaml
@@ -12,3 +18,4 @@
 - name: INIT_HELM_DEPENDENCY_BUILD
   valueIf:
     "ARGOCD_ENV_ENVIRONMENT == 'staging'": "true"
+# -- END SNIPPET --

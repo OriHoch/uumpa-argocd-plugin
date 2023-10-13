@@ -1,25 +1,37 @@
-- alertmanager_user: ~ARGOCD_ENV_ALERTMANAGER_USER~
+# -- START SNIPPET uumpa_data --
+- # set values from the application spec plugin env vars (they are prefixed with ARGOCD_ENV_ for security reasons)
+  alertmanager_user: ~ARGOCD_ENV_ALERTMANAGER_USER~
+  # set values from global env vars which can be set on the plugin sidecar container
   domain_suffix_global: ~DOMAIN_SUFFIX~
   domain_suffix_local: ~ARGOCD_ENV_DOMAIN_SUFFIX~
+  # can use dynamic values from other fields
   alertmanager_domain: alertmanager.~domain_suffix_local~
+  # set values from secret or configmap
+  # this will set a value from a single key within the secret
   nfs_ip:
     type: secret
     namespace: default
     name: nfs
     key: ip
+  # this will set the entire secret as a key-value map
   nfs:
     type: secret
     namespace: default
     name: nfs
+  # this will set the specified keys only as a key-value map
   alertmanager_secret:
     type: secret
     name: alertmanager-httpauth
     keys: [auth, password]
-- if: not alertmanager_secret.auth or not alertmanager_secret.password
+- # if statements are Python code which has access to all the data from the previous items as local variables
+  # the specified values will be set only if the condition is met
+  if: not alertmanager_secret.auth or not alertmanager_secret.password
+  # generate an httpauth string which can be used for nginx ingress auth
   alertmanager_secret.auth:
     type: httpauth
     user: ~alertmanager_user~
     password: ~alertmanager_secret.password~
+  # generate a password, set it as a value in the alertmanager_secret map object
   alertmanager_secret.password:
     type: password
     length: 18
@@ -27,8 +39,11 @@
     type: configmap
     name: nfs-init
     key: initialized
-- user.name: admin
+- # can also set values to objects, in this case data will contain a user object with name and password fields
+  user.name: admin
   user.password:
     type: password
     length: 18
+# this object can then be used in templates or other fields
 - user_auth: ~user.name~:~user.password~
+# -- END SNIPPET --

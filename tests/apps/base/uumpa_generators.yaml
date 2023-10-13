@@ -1,20 +1,29 @@
+# -- START SNIPPET uumpa_generators --
+# create a secret with values from uumpa_data
 - type: secret
   name: alertmanager-httpauth
   data:
       auth: ~alertmanager_secret.auth~
       user: ~alertmanager_user~
       password: ~alertmanager_secret.password~
-- if: not nfs_initialized
+# run a job to handle more complex logic
+- # the job will run only if this condition is met
+  if: not nfs_initialized
   type: job
+  # Following 2 values are the same as the ArgoCD hook attributes, see https://argo-cd.readthedocs.io/en/stable/user-guide/resource_hooks/
   hook: PreSync
   hook-delete-policy: BeforeHookCreation
   name: nfs-init
+  # path to the script to run relative to the chart root, script should have a shebang line specifying the interpreter
   script: init.sh
+  # set env vars to be available to the script, allows to use values from the data section
   env:
     NSF_IP: ~nfs_ip~
     NFS_ID_RSA: FILE::~nfs.id_rsa~
+  # generators will run after this job completed successfully, or if the job was skipped due to it's if condition
   generators:
     - type: configmap
       name: nfs-init
       data:
         initialized: "true"
+# -- END SNIPPET --

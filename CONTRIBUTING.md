@@ -1,5 +1,13 @@
 # Contributing to uumpa-argocd-plugin
 
+## Development
+
+```
+python3 -m venv venv
+pip install -r requirements.txt
+pip install -e .
+```
+
 ## Tests
 
 E2E Tests Prerequisites:
@@ -35,10 +43,8 @@ pytest
 To log in to the ArgoCD created in the E2E tests:
 
 ```
-# Get the admin password
-kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
-# Start a port forward
-kubectl -n argocd port-forward svc/argocd-server 8080:80
+export ARGOCD_PORT_FORWARD_KEEP=1
+pytest -svvx tests/test_e2e.py
 ```
 
-Open http://localhost:8080 and login with `admin` username and the password from above.
+The final log line will contain the argocd login details

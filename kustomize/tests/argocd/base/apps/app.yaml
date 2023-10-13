@@ -11,10 +11,18 @@ spec:
     repoURL: http://git/git/uumpa-argocd-plugin
     targetRevision: main
     path: tests/apps/base
+    # -- START SNIPPET argocd_app_plugin --
     plugin:
       name: uumpa
       env:
-        - name: ALERTMANAGER_USER
-          value: admin
+        # this is a core env var which allows to add arguments to the helm template command
         - name: HELM_ARGS
           value: --values my-values.yaml --values my-other-values.yaml
+        # optional env vars which will be available to be used later
+        # ArgoCD will add `ARGOCD_ENV_` prefix to the env var name as a safety measure
+        - name: ALERTMANAGER_USER
+          value: admin
+    # -- END SNIPPET --
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true

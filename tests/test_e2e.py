@@ -1,186 +1,150 @@
 import os
-import time
-import glob
 import json
-import base64
 import functools
 import subprocess
-import contextlib
-from textwrap import dedent
 
-
-def wait_for(check, seconds, msg='Timeout expired'):
-    for i in range(seconds):
-        if check():
-            return
-        time.sleep(1)
-    raise Exception(msg)
-
-
-def check_argocd_repo_server():
-    pods = json.loads(subprocess.check_output('kubectl -n argocd get pods -lapp.kubernetes.io/name=argocd-repo-server -o json', shell=True))['items']
-    if len(pods) != 1:
-        return False
-    pod = pods[0]
-    if pod['status']['phase'] != 'Running':
-        return False
-    for container in pod['status']['containerStatuses']:
-        if not container['ready']:
-            return False
-    return True
-
-
-def wait_for_argocd_repo_server():
-    wait_for(check_argocd_repo_server, 120, 'argocd-repo-server did not start')
-
-
-def wait_for_argocd_crds():
-    wait_for(lambda: 'applications.argoproj.io' in subprocess.check_output('kubectl api-resources -o name', shell=True).decode('utf-8'), 120, 'argocd CRDs did not install')
-
-
-def install_argocd(argocd_kustomize_dir):
-    subprocess.run(['kubectl', 'apply', '-f', '-'], text=True, check=True, input=json.dumps({
-        "apiVersion": "v1",
-        "kind": "Namespace",
-        "metadata": {"name": 'argocd'}
-    }))
-    subprocess.check_call(['kubectl', 'apply', '-n', 'argocd', '-k', os.path.join('kustomize', 'tests', 'argocd', argocd_kustomize_dir)])
-    wait_for_argocd_repo_server()
-    wait_for_argocd_crds()
-    for path in glob.glob(os.path.join('kustomize', 'tests', 'argocd', argocd_kustomize_dir, 'namespaces', '*')):
-        namespace = path.split('/')[-1]
-        if namespace != "default":
-            subprocess.run(['kubectl', 'apply', '-f', '-'], text=True, check=True, input=json.dumps({
-                "apiVersion": "v1",
-                "kind": "Namespace",
-                "metadata": {"name": namespace}
-            }))
-        if os.path.exists(os.path.join(path, 'kustomization.yaml')):
-            subprocess.check_call(['kubectl', 'apply', '-n', namespace, '-k', path])
-    for path in glob.glob(os.path.join('kustomize', 'tests', 'argocd', argocd_kustomize_dir, 'apps', '*.yaml')):
-        subprocess.check_call(['kubectl', 'apply', '-n', 'argocd', '-f', path])
+from .common import wait_for
 
 
 def check_argocd_app_synced(app_name):
-    return json.loads(subprocess.check_output(f'argocd --core app get -o json {app_name}', shell=True))['status']['sync']['status'] == 'Synced'
+    return json.loads(subprocess.check_output(f'argocd app get -o json {app_name}', shell=True))['status']['sync']['status'] == 'Synced'
+
+
+def argocd_app_terminate_op(app_name):
+    return subprocess.call(f'argocd app terminate-op {app_name}', shell=True) == 20
 
 
 def argocd_app_git_hard_refresh_sync(app_name):
+    subprocess.check_call(f'kubectl delete ns {app_name} --ignore-not-found --wait', shell=True)
+    subprocess.check_call(f'kubectl create ns {app_name}', shell=True)
+    if app_name != 'tests-base':
+        subprocess.check_call(f'kubectl apply -n {app_name} -k kustomize/tests/argocd/base/namespaces/{app_name}', shell=True)
+    subprocess.check_call(f'kubectl delete job -lapp.kubernetes.io/instance={app_name} --ignore-not-found --wait', shell=True)
     subprocess.check_call(f'argocd app diff --hard-refresh --exit-code=false {app_name}', shell=True)
-    subprocess.check_call(f'argocd app sync {app_name}', shell=True)
+    wait_for(functools.partial(argocd_app_terminate_op, app_name), 60, f'argocd app {app_name} did not terminate')
+    subprocess.check_call(f'argocd app sync {app_name} --force --assumeYes --prune', shell=True)
     check = functools.partial(check_argocd_app_synced, app_name)
     wait_for(check, 240, f'argocd app {app_name} did not sync')
 
 
-@contextlib.contextmanager
-def argocd_login():
-    subprocess.check_call('kubectl config set-context --current --namespace=argocd', shell=True)
-    if os.environ.get('ARGOCD_PORT_FORWARD_PORT'):
-        port = os.environ['ARGOCD_PORT_FORWARD_PORT']
-        port_forward = None
+def assert_argocd_app_configmap(name, expected_configmap_changes):
+    actual_configmap = json.loads(
+        subprocess.check_output(f'kubectl -n {name} get configmap main-app-config -o json', shell=True)
+    )['data']
+    alertmanager_secret_auth_user, alertmanager_secret_auth_encrypted_password = actual_configmap['alertmanager_secret.auth'].split(':')
+    assert alertmanager_secret_auth_user == 'admin'
+    assert len(alertmanager_secret_auth_encrypted_password) > 10
+    alertmanager_secret_json = actual_configmap['alertmanager_secret']
+    alertmanager_secret = json.loads(alertmanager_secret_json)
+    alertmanager_secret_password = actual_configmap['alertmanager_secret.password']
+    assert alertmanager_secret == {
+        "auth": f"{alertmanager_secret_auth_user}:{alertmanager_secret_auth_encrypted_password}",
+        "password": alertmanager_secret_password
+    }
+    user_json = actual_configmap.pop('user')
+    user = json.loads(user_json)
+    assert set(user.keys()) == {'name', 'password'}
+    assert user['name'] == 'admin'
+    assert len(user['password']) > 8
+    expected_configmap = {
+        'ARGOCD_ENV_ALERTMANAGER_USER': 'admin',
+        'ARGOCD_ENV_DOMAIN_SUFFIX': 'local.example.com',
+        'ARGOCD_ENV_ENVIRONMENT': '',
+        'ARGOCD_ENV_HELM_ARGS': '--values my-values.yaml --values my-other-values.yaml',
+        'ARGOCD_ENV_INIT_HELM_DEPENDENCY_BUILD': '~ARGOCD_ENV_INIT_HELM_DEPENDENCY_BUILD~',
+        'ARGOCD_ENV_INIT_PLUGIN_FUNCTIONS': '~ARGOCD_ENV_INIT_PLUGIN_FUNCTIONS~',
+        'DOMAIN_SUFFIX': 'global.example.com',
+        'alertmanager_domain': 'alertmanager.local.example.com',
+        'alertmanager_secret': alertmanager_secret_json,
+        'alertmanager_secret.auth': f'{alertmanager_secret_auth_user}:{alertmanager_secret_auth_encrypted_password}',
+        'alertmanager_secret.password': alertmanager_secret_password,
+        'alertmanager_user': 'admin',
+        'domain_suffix_global': 'global.example.com',
+        'domain_suffix_local': 'local.example.com',
+        'helm_values_hello': 'world',
+        'helm_values_world': 'hello',
+        'nfs_ip': '1.2.3.4',
+        'server': '',
+        'user.name': 'admin',
+        'user.password': user['password'],
+        'user_auth': f'admin:{user["password"]}',
+        'nfs_initialized': '',
+        **expected_configmap_changes
+    }
+    assert actual_configmap == expected_configmap
+
+
+def assert_argocd_app_job(name, expected_nfs_init_job, expected_nfs_init_configmap):
+    jobs = json.loads(subprocess.check_output(f'kubectl get job -l app.kubernetes.io/instance={name} -o json', shell=True))['items']
+    if expected_nfs_init_job:
+        assert len(jobs) == 1
+        job = jobs[0]
+        assert job['status']['succeeded'] == 1
+        job_name = job['metadata']['name']
+        pods = json.loads(subprocess.check_output(f'kubectl get pod -l job-name={job_name} -o json', shell=True))['items']
+        assert len(pods) == 1
+        pod = pods[0]
+        assert pod['status']['phase'] == 'Succeeded'
+        pod_name = pod['metadata']['name']
+        logs = subprocess.check_output(f'kubectl logs {pod_name}', shell=True, text=True)
+        logs = logs.split('~~~~~~~~~~')
+        assert len(logs) == 4
+        assert logs[0].strip() == 'Hello from nfs init.sh', logs
+        assert logs[1].strip().startswith('/tmp/') and logs[1].strip().endswith('/.NFS_ID_RSA'), logs
+        assert logs[2].strip() == '---- NFS ID RSA ----', logs
+        assert logs[3].strip() == f'configmap/nfs-init {expected_nfs_init_configmap}\nrunning subgenerators...', logs
     else:
-        port = '8080'
-        cmd = ['kubectl', 'port-forward', 'svc/argocd-server', '-n', 'argocd', '8080:443']
-        port_forward = None
-        port_forward_exists = False
-        if os.environ.get('ARGOCD_PORT_FORWARD_KEEP'):
-            for line in subprocess.check_output(['ps', 'aux']).decode('utf-8').splitlines():
-                if ' '.join(cmd) in line:
-                    port_forward_exists = True
-                    break
-            if not port_forward_exists:
-                port_forward = subprocess.Popen(cmd, stdout=subprocess.DEVNULL)
-    password = None
+        assert len(jobs) == 0
+
+
+def assert_argocd_app(name, expected_configmap_changes=None, expected_testdep_source='tgz',
+                      expected_nfs_init_job=True, expected_nfs_init_configmap='created'):
     try:
-        password = base64.b64decode(
-            json.loads(
-                subprocess.check_output('kubectl get secret argocd-initial-admin-secret -o json', shell=True)
-            )['data']['password'].encode()
-        ).decode()
-        subprocess.check_call(f'argocd login --insecure localhost:{port} --username admin --password {password}', shell=True)
-        yield
-    finally:
-        if os.environ.get('ARGOCD_PORT_FORWARD_KEEP'):
-            print('Keeping port-forward running for debugging')
-            print(f'Login to argocd at http://localhost:{port} with username "admin" and password "{password}"')
-        elif port_forward:
-            print('Killing port-forward, to keep it running set env var ARGOCD_PORT_FORWARD_KEEP=1')
-            port_forward.kill()
+        assert_argocd_app_configmap(name, expected_configmap_changes or {})
+        assert expected_testdep_source == json.loads(subprocess.check_output(
+            f'kubectl -n {name} get configmap testdep -o json', shell=True
+        ))['data']['source']
+        assert_argocd_app_job(name, expected_nfs_init_job, expected_nfs_init_configmap)
+    except Exception as e:
+        raise Exception(f'Failed to assert argocd app {name}') from e
 
 
-def git_pod_ready():
-    pods = json.loads(subprocess.check_output('kubectl get pods -lapp=git -o json', shell=True))['items']
-    if len(pods) != 1:
-        return False
-    pod = pods[0]
-    if pod['status']['phase'] != 'Running':
-        return False
-    for container in pod['status']['containerStatuses']:
-        if not container['ready']:
-            return False
-    return True
+def test_base(argocd):
+    argocd_app_git_hard_refresh_sync('tests-base')
+    assert_argocd_app('tests-base')
 
 
-def argocd_update_git():
-    wait_for(git_pod_ready, 120, 'git pod did not start')
-    subprocess.check_call(['kubectl', 'exec', 'deploy/git', '--', 'bash', '-c', dedent('''
-        rm -rf /git/uumpa-argocd-plugin &&\
-        mkdir -p /git/uumpa-argocd-plugin &&\
-        cp -r /uumpa-argocd-plugin/* /git/uumpa-argocd-plugin/ &&\
-        cd /git/uumpa-argocd-plugin &&\
-        git init -b main &&\
-        git config user.email root@localhost &&\
-        git config user.name root &&\
-        git add . &&\
-        git commit -m "Initial commit"
-    ''')])
-
-
-def test():
-    install_argocd('base')
-    with argocd_login():
-        argocd_update_git()
-        argocd_app_git_hard_refresh_sync('tests-base')
-        argocd_app_git_hard_refresh_sync('tests-base-production')
-        argocd_app_git_hard_refresh_sync('tests-base-staging')
-        actual_configmap = json.loads(subprocess.check_output('kubectl -n tests-base get configmap main-app-config -o json', shell=True))['data']
-        alertmanager_secret_auth_user, alertmanager_secret_auth_encrypted_password = actual_configmap['alertmanager_secret.auth'].split(':')
-        assert alertmanager_secret_auth_user == 'admin'
-        assert len(alertmanager_secret_auth_encrypted_password) > 10
-        alertmanager_secret_json = actual_configmap['alertmanager_secret']
-        alertmanager_secret = json.loads(alertmanager_secret_json)
-        alertmanager_secret_password = actual_configmap['alertmanager_secret.password']
-        assert alertmanager_secret == {
-            "auth": f"{alertmanager_secret_auth_user}:{alertmanager_secret_auth_encrypted_password}",
-            "password": alertmanager_secret_password
-        }
-        user_json = actual_configmap.pop('user')
-        user = json.loads(user_json)
-        assert set(user.keys()) == {'name', 'password'}
-        assert user['name'] == 'admin'
-        assert len(user['password']) > 8
-        assert actual_configmap.pop('nfs_initialized') in {'', 'true'}
-        expected_configmap = {
-            'ARGOCD_ENV_ALERTMANAGER_USER': 'admin',
-            'ARGOCD_ENV_DOMAIN_SUFFIX': 'local.example.com',
-            'ARGOCD_ENV_ENVIRONMENT': '',
-            'ARGOCD_ENV_HELM_ARGS': '--values my-values.yaml --values my-other-values.yaml',
-            'ARGOCD_ENV_INIT_HELM_DEPENDENCY_BUILD': '~ARGOCD_ENV_INIT_HELM_DEPENDENCY_BUILD~',
-            'ARGOCD_ENV_INIT_PLUGIN_FUNCTIONS': '~ARGOCD_ENV_INIT_PLUGIN_FUNCTIONS~',
-            'DOMAIN_SUFFIX': 'global.example.com',
-            'alertmanager_domain': 'alertmanager.local.example.com',
-            'alertmanager_secret': alertmanager_secret_json,
-            'alertmanager_secret.auth': f'{alertmanager_secret_auth_user}:{alertmanager_secret_auth_encrypted_password}',
-            'alertmanager_secret.password': alertmanager_secret_password,
-            'alertmanager_user': 'admin',
-            'domain_suffix_global': 'global.example.com',
-            'domain_suffix_local': 'local.example.com',
-            'helm_values_hello': 'world',
-            'helm_values_world': 'hello',
+def test_base_production(argocd):
+    argocd_app_git_hard_refresh_sync('tests-base-production')
+    assert_argocd_app(
+        'tests-base-production',
+        expected_configmap_changes={
+            'ARGOCD_ENV_ENVIRONMENT': 'production',
+            'ARGOCD_ENV_HELM_ARGS': '-f values.production.yaml',
+            'helm_values_hello': '',
+            'helm_values_world': '',
             'nfs_ip': '1.2.3.4',
-            'server': '',
-            'user.name': 'admin',
-            'user.password': user['password'],
-            'user_auth': f'admin:{user["password"]}'
-        }
-        assert actual_configmap == expected_configmap
+            'server': 'my-production',
+        },
+        expected_nfs_init_configmap='configured'
+    )
+
+
+def test_base_staging(argocd):
+    argocd_app_git_hard_refresh_sync('tests-base-staging')
+    assert_argocd_app(
+        'tests-base-staging',
+        expected_configmap_changes={
+            'ARGOCD_ENV_ENVIRONMENT': 'staging',
+            'ARGOCD_ENV_HELM_ARGS': '-f values.staging.yaml',
+            'ARGOCD_ENV_INIT_HELM_DEPENDENCY_BUILD': 'true',
+            'ARGOCD_ENV_INIT_PLUGIN_FUNCTIONS': 'init_helm',
+            'helm_values_hello': '',
+            'helm_values_world': '',
+            'nfs_ip': '1.2.3.4',
+            'nfs_initialized': 'true',
+            'server': 'my-staging',
+        },
+        expected_testdep_source='chart',
+        expected_nfs_init_job=False
+    )

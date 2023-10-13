@@ -7,6 +7,10 @@
     namespace: default
     name: nfs
     key: ip
+  nfs:
+    type: secret
+    namespace: default
+    name: nfs
   alertmanager_secret:
     type: secret
     name: alertmanager-httpauth

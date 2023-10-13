@@ -3,7 +3,7 @@ on:
     branches:
       - main
     paths-ignore:
-      - manifests/
+      - "**.md"
 jobs:
   ci:
     runs-on: ubuntu-latest
@@ -39,3 +39,13 @@ jobs:
           kind create cluster --config tests/kind.yaml &&\
           sed -i '/---snip---/q' "kustomize/tests/argocd/base/patch-argocd-repo-server-deployment.yaml" &&\
           pytest
+      - name: render readme
+        run: |
+          python render_readme.py > README.md
+          if ! git diff --exit-code README.md; then
+            git config --global user.email "ci@localhost" &&\
+            git config --global user.name "CI" &&\
+            git add README.md &&\
+            git commit -m "update README" &&\
+            git push
+          fi

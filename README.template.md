@@ -15,16 +15,7 @@ Enable the plugin in the ArgoCD application spec by adding the plugin section un
 
 ```yaml
   source:
-    plugin:
-      name: uumpa
-      env:
-        # this is a core env var which allows to add arguments to the helm template command
-        - name: HELM_ARGS
-          value: --values my-values.yaml --values my-other-values.yaml
-        # optional env vars which will be available to be used later
-        # ArgoCD will add `ARGOCD_ENV_` prefix to the env var name as a safety measure
-        - name: ALERTMANAGER_USER
-          value: admin
+# -- SNIPPET argocd_app_plugin --
 ```
 
 The plugin will handle the app as a Helm chart.
@@ -516,4 +507,3 @@ def run_generator_job(tmpdir, env):
     generator = json.loads(env['MY_GENERATOR_JSON'])
     # do something with the generator
 ```
-

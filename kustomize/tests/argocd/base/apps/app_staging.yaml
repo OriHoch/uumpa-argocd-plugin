@@ -20,3 +20,6 @@ spec:
           value: staging
         - name: HELM_ARGS
           value: --values my-values.yaml --values my-other-values.yaml
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true

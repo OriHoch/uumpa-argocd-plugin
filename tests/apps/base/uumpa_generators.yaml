@@ -12,7 +12,7 @@
   script: init.sh
   env:
     NSF_IP: ~nfs_ip~
-    NFS_ID_RSA: FILE::~nfs_id_rsa~
+    NFS_ID_RSA: FILE::~nfs.id_rsa~
   generators:
     - type: configmap
       name: nfs-init

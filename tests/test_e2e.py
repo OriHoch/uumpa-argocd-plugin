@@ -105,6 +105,7 @@ def test_base(argocd):
 
 
 def test_base_production(argocd):
+    delete_vault_paths(['production'])
     argocd_app_git_hard_refresh_sync('tests-base-production')
     configmap = assert_argocd_app(
         'tests-base-production',

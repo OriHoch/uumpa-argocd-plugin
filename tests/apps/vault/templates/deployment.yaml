@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vault
+spec:
+  selector:
+    matchLabels:
+      app: vault
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: vault
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: vault
+          # Pulled Oct 14, 2023
+          image: hashicorp/vault@sha256:ccbb5fde9d55b3dc57cf8694dea9c988ba0127b205661b652b5264f8d5901a58
+          args:
+            - server
+          env:
+            - name: VAULT_LOCAL_CONFIG
+              value: '{"backend": {"file": {"path": "/var/vault/file"}}, "listener": {"tcp": {"address": "0.0.0.0:8200", "tls_disable": 1}}, "api_addr": "http://127.0.0.1:8200", "ui": true}'
+          volumeMounts:
+            - name: vaultdata
+              mountPath: /var/vault
+          securityContext:
+            privileged: true
+      volumes:
+        - name: vaultdata
+          emptyDir: {}

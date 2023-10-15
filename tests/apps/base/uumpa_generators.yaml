@@ -26,4 +26,22 @@
       name: nfs-init
       data:
         initialized: "true"
+# example of using a plugin, see below for more details regarding plugins
+- if: ARGOCD_ENV_ENVIRONMENT == 'staging'
+  plugin: uumpa_argocd_plugin.plugins.vault
+  name: vault
+  vault:
+    staging/alertmanager-httpauth:
+      auth: "~alertmanager_secret.auth~"
+      user: "~alertmanager_user~"
+      password: "~alertmanager_secret.password~"
+    staging/nfs:
+      ip: "~nfs_ip~"
+- if: ARGOCD_ENV_ENVIRONMENT == 'production'
+  plugin: uumpa_argocd_plugin.plugins.vault
+  name: vault
+  vault:
+    production:
+      # because alertmanager_secret is json, we use a base64 encoded value to avoid issues with json encoding/decoding
+      alertmanager_secret: ~alertmanager_secret:base64~
 # -- END SNIPPET --

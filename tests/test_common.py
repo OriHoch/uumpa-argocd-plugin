@@ -1,4 +1,6 @@
 import os
+import json
+import base64
 
 import pytest
 
@@ -22,6 +24,11 @@ def test_render_string(v, expected):
     ('Hello ~name~, how are you?', {}, 'Hello ~name~, how are you?'),
     ('Hello ~user.name~, how are you?', {'user': {'name': 'user'}}, 'Hello user, how are you?'),
     ('Hello ~user.name~, how are you?', {'user': {}}, 'Hello ~user.name~, how are you?'),
+    (
+        json.dumps({'production': {'alertmanager_secret': '~alertmanager_secret:base64~'}}),
+        {'alertmanager_secret': {'user': 'admin'}},
+        json.dumps({'production': {'alertmanager_secret': base64.b64encode(json.dumps({'user': 'admin'}).encode()).decode()}})
+    ),
 ])
 def test_render(value, data, expected):
     assert common.render(value, data) == expected

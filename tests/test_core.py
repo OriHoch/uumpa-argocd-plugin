@@ -204,7 +204,7 @@ def test_process_generator_job_skipped():
         ]
     }
     data = {'run_it': False}
-    assert list(core.process_generator_job(generator, data)) == [{'generator': {'generator': 3}}]
+    assert list(core.process_generator_job(generator, data, True)) == [{'generator': {'generator': 3}}]
 
 
 def test_process_generator_secret_configmap():

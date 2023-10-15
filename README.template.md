@@ -280,14 +280,15 @@ def process_value(key, value, data):
     common.process_keyed_value(secret_data, key, value, data)
 ```
 
-#### `process_generator(generator, data)`
+#### `process_generator(generator, data, is_skipped)`
 
 ##### Arguments
 
-| Name      | Type | Description                  |
-|-----------|------|------------------------------|
-| generator | dict | the generator definition     |
-| data      | dict | the uumpa argocd plugin data |
+| Name       | Type | Description                                                      |
+|------------|------|------------------------------------------------------------------|
+| generator  | dict | the generator definition                                         |
+| data       | dict | the uumpa argocd plugin data                                     |
+| is_skipped | bool | True if the generator should be skipped due to it's if condition |
 
 ##### Proess
 
@@ -299,6 +300,9 @@ Generators need to be yielded as a dict containing a single attribute `generator
 
 Generators should not modify the `data` dict, and can assume all values are already rendered, so no need to call
 `common.render` on them like in the `process_value` function.
+
+If the `is_skipped` argument is True, the generator should not perform its main functionality, but can still yield items
+if needed.
 
 ##### Example
 

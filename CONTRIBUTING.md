@@ -40,11 +40,11 @@ Run the tests:
 pytest
 ```
 
-To log in to the ArgoCD created in the E2E tests:
+To log in to the ArgoCD / Vault created in the E2E tests:
 
 ```
-export ARGOCD_PORT_FORWARD_KEEP=1
+export PORT_FORWARDS_KEEP=1
 pytest -svvx tests/test_e2e.py
 ```
 
-The final log line will contain the argocd login details
+The final log line will contain the login details

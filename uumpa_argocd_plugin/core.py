@@ -45,9 +45,14 @@ def process_value(key, value, data_):
         globals()[f'process_value_{type_}'](key, value, data_)
 
 
-def process_generator_job(generator, data_):
-    if_ = generator.get('if', None)
-    if common.process_if(if_, data_):
+def process_generator_job(generator, data_, is_skipped=False):
+    if is_skipped:
+        job_status = 'skip'
+        for generator in generator['generators']:
+            if_ = generator.get('if', '_job_status in ["skip", "success"]')
+            if common.process_if(if_, {**data_, '_job_status': job_status}):
+                yield {'generator': generator}
+    else:
         repo_server_deployment = json.loads(subprocess.check_output([
             'kubectl', '-n', config.ARGOCD_NAMESPACE, 'get', 'deployment', config.ARGOCD_REPO_SERVER_DEPLOYMENT, '-o', 'json'
         ], text=True))
@@ -131,12 +136,6 @@ def process_generator_job(generator, data_):
                 }
             }
         }
-    else:
-        job_status = 'skip'
-        for generator in generator['generators']:
-            if_ = generator.get('if', '_job_status in ["skip", "success"]')
-            if common.process_if(if_, {**data_, '_job_status': job_status}):
-                yield {'generator': generator}
 
 
 def process_generator_secret_configmap(type_, generator, data_):
@@ -158,13 +157,14 @@ def process_generator_secret_configmap(type_, generator, data_):
     }
 
 
-def process_generator(generator, data_):
+def process_generator(generator, data_, is_skipped=False):
     try:
         type_ = generator.get('type')
         if type_ in ['secret', 'configmap']:
-            yield process_generator_secret_configmap(type_, generator, data_)
+            if not is_skipped:
+                yield process_generator_secret_configmap(type_, generator, data_)
         else:
-            yield from globals()[f'process_generator_{type_}'](generator, data_)
+            yield from globals()[f'process_generator_{type_}'](generator, data_, is_skipped)
     except Exception as e:
         raise Exception(f'generator: {generator}') from e
 

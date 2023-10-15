@@ -46,4 +46,9 @@
     length: 18
 # this object can then be used in templates or other fields
 - user_auth: ~user.name~:~user.password~
+# example of using the vault plugin, see below regarding how to install and use plugins
+- vault_test:
+    plugin: uumpa_argocd_plugin.plugins.vault
+    path: test
+    keys: [value, hello]
 # -- END SNIPPET --

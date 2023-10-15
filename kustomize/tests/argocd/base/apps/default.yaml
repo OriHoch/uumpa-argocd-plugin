@@ -1,0 +1,15 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: default
+spec:
+  project: default
+  destination:
+    namespace: default
+    server: 'https://kubernetes.default.svc'
+  source:
+    repoURL: http://git/git/uumpa-argocd-plugin
+    targetRevision: main
+    path: tests/apps/default
+    plugin:
+      name: uumpa

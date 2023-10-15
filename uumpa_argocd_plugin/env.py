@@ -1,6 +1,14 @@
 import os
 
-from . import config, common
+from . import config, common, data
+
+
+def parse_value(value):
+    if isinstance(value, dict):
+        data_ = {**os.environ}
+        data.process_value('value', value, data_)
+        value = data_.get('value')
+    return str(value or '')
 
 
 def update_env(chart_path):
@@ -14,14 +22,14 @@ def update_env(chart_path):
                     assert len(env_var) == 0
                     for if_, value in value_if.items():
                         if eval(if_, {}, os.environ):
-                            os.environ[name] = value
+                            os.environ[name] = parse_value(value)
                             break
                 elif 'defaultValue' in env_var:
                     default_value = env_var.pop('defaultValue')
                     assert len(env_var) == 0
                     if name not in os.environ:
-                        os.environ[name] = default_value
+                        os.environ[name] = parse_value(default_value)
                 else:
-                    os.environ[name] = env_var.get('value') or ''
+                    os.environ[name] = parse_value(env_var.get('value'))
     for k, v in config.get_argocd_app_spec_env_vars().items():
         setattr(config, k, v)

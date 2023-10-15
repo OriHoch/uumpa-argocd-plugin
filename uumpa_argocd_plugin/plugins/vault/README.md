@@ -8,25 +8,25 @@ Following is an example of steps to install, but you might need to adjust it to 
 
 * Enable approle auth method with `approle/` path
 * Enable kv v2 secrets engine with `kv/` path
-* Create a policy named `read-only`:
+* Create a policy named `approle`:
 ```
 path "kv/data/*" {
   capabilities = ["create", "list", "read", "update"]
 }
 ```
 * Click on the CLI icon on the top right and run the following commands:
-  * `write auth/approle/role/read-only token_ttl=1h token_max_ttl=4h policies=read-only`
-  * `read auth/approle/role/read-only/role-id`
-  * `write auth/approle/role/read-only/secret-id -force`
+  * `write auth/approle/role/approle token_ttl=1h token_max_ttl=4h policies=approle`
+  * `read auth/approle/role/approle/role-id`
+  * `write -force auth/approle/role/approle/secret-id`
 
 Create a Secret with the vault approle details:
 
 ```
 kubectl -n argocd create secret generic vault-approle \
-  --from-literal=VAULT_ROLE_ID=ROLE_ID \
-  --from-literal=VAULT_SECRET_ID=SECRET_ID \
-  --from-literal=VAULT_ADDR=VAULT_ADDR
-  --from-literal=VAULT_PATH=kv/data
+  --from-literal=ARGOCD_ENV_VAULT_ROLE_ID=ROLE_ID \
+  --from-literal=ARGOCD_ENV_VAULT_SECRET_ID=SECRET_ID \
+  --from-literal=ARGOCD_ENV_VAULT_ADDR=VAULT_ADDR
+  --from-literal=ARGOCD_ENV_VAULT_PATH=kv/data
 ```
 
 Set the env vars in the plugin sidecar container:
@@ -39,7 +39,7 @@ envFrom:
 
 ## Usage
 
-Get values from Vault:
+Get values from Vault, example `uumpa_data.yaml`:
 
 ```yaml
 - password:
@@ -48,27 +48,25 @@ Get values from Vault:
     key: password
 ```
 
-Set values in Vault:
+Set values in Vault, example `uumpa_generators.yaml`:
 
 ```yaml
-update_vault:
-  plugin: uumpa_argocd_plugin.plugins.vault
-  hook: PreSync
-  vault:
-    my/secret:
-      password: ~password~
+- plugin: uumpa_argocd_plugin.plugins.vault
+  path: my/secret
+  data:
+    password: ~password~
 ```
 
 ## Reference
 
 ### Environment variables
 
-| Name            | Description                                  | Default |
-|-----------------|----------------------------------------------|---------|
-| VAULT_ROLE_ID   | AppRole role_id to authenticate with VAult   | -       |
-| VAULT_SECRET_ID | AppRole secret_id to authenticate with VAult | -       |
-| VAULT_ADDR      | Vault URL                                    | -       |
-| VAULT_PATH      | Path in Vault to get/set secrets in          | -       |
+| Name                       | Description                                  | Default |
+|----------------------------|----------------------------------------------|---------|
+| ARGOCD_ENV_VAULT_ROLE_ID   | AppRole role_id to authenticate with Vault   | -       |
+| ARGOCD_ENV_VAULT_SECRET_ID | AppRole secret_id to authenticate with Vault | -       |
+| ARGOCD_ENV_VAULT_ADDR      | Vault URL                                    | -       |
+| ARGOCD_ENV_VAULT_PATH      | Path in Vault to get/set secrets in          | -       |
 
 ### Common attributes
 
@@ -76,7 +74,7 @@ update_vault:
 |--------|-------------------------------------|---------|
 | plugin | `uumpa_argocd_plugin.plugins.vault` | -       |
 
-### Default data type
+### Data
 
 Get values from Vault path:
 
@@ -90,10 +88,14 @@ Get values from Vault path:
 | key  | Key to get from the secret          | -                     |
 | keys | List of keys to get from the secret | -                     |
 
-### Default hook
+### Generator
 
-Update values in given Vault path, creates the Vault path if doen'st exist, updates only the specified keys, does not delete keys
+Update values in given Vault path using an ArgoCD Hook
 
-| Name  | Description                                                              | Default |
-|-------|--------------------------------------------------------------------------|---------|
-| vault | map where key is a path and value is map of the key/values to set for it | -       |
+Creates the Vault path if doen'st exist, updates only the specified keys, does not delete keys
+
+| Name  | Description                                                                                                                                          | Default |
+|-------|------------------------------------------------------------------------------------------------------------------------------------------------------|---------|
+| name  | Name of the job to create, should be unique in case multiple vault generators are used in the same app                                               | -       |
+| vault | Key-Value data, key is vault path, value is a map of key: value to set in that path                                                                  | -       |
+| *     | Any other attribute will be added to the created job, see [/README.md#jobs](https://github.com/OriHoch/uumpa-argocd-plugin/blob/main/README.md#jobs) | -       |

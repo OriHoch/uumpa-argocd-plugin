@@ -1,5 +1,6 @@
 import os
 import json
+import base64
 
 from ruamel.yaml import YAML
 
@@ -30,14 +31,18 @@ def render_string(v):
         return ''
 
 
+def render_replace(value, k, v):
+    return value.replace(f'~{k}~', v).replace(f'~{k}:base64~', base64.b64encode(v.encode()).decode())
+
+
 def render(value, data_):
     for k, v in {**os.environ, **data_}.items():
         if isinstance(v, dict):
-            value = value.replace(f'~{k}~', json.dumps(v))
+            value = render_replace(value, k, json.dumps(v))
             for k2, v2 in v.items():
-                value = value.replace(f'~{k}.{k2}~', render_string(v2))
+                value = render_replace(value, f'{k}.{k2}', render_string(v2))
         else:
-            value = value.replace(f'~{k}~', render_string(v))
+            value = render_replace(value, k, render_string(v))
     return value
 
 
@@ -67,7 +72,7 @@ def process_if(if_, data_):
     else:
         assert isinstance(if_, str)
         if_locals = {}
-        for k, v in data_.items():
+        for k, v in {**os.environ, **data_}.items():
             if isinstance(v, dict):
                 if_locals[k] = IfLocalDict(v)
             else:

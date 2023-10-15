@@ -60,3 +60,22 @@ def test_run_argocd():
                 input='{"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "nfs-initializaed", "namespace": "storage"}, "data": {"initialized": "yes"}}',
                 text=True, check=True
             )
+
+
+def test_run_job_process_env():
+    env = jobs.run_job_process_env([], None, {}, {
+        'VAULT_GENERATORS_JSON': json.dumps({
+            'production': {
+                'alertmanager_secret': '~alertmanager_secret:base64~'
+            }
+        })
+    }, {
+        'alertmanager_secret': {
+            'user': 'admin'
+        }
+    })
+    assert set(env.keys()) == {'VAULT_GENERATORS_JSON'}
+    vault_generators = json.loads(env['VAULT_GENERATORS_JSON'])
+    assert set(vault_generators.keys()) == {'production'}
+    assert set(vault_generators['production'].keys()) == {'alertmanager_secret'}
+    assert vault_generators['production']['alertmanager_secret'] == base64.b64encode(json.dumps({'user': 'admin'}).encode()).decode()

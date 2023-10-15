@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vault
+spec:
+  project: default
+  destination:
+    namespace: vault
+    server: 'https://kubernetes.default.svc'
+  source:
+    repoURL: http://git/git/uumpa-argocd-plugin
+    targetRevision: main
+    path: tests/apps/vault
+    plugin:
+      name: uumpa
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true

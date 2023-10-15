@@ -1,30 +1,16 @@
-import os
+import base64
 import json
-import functools
 import subprocess
 
-from .common import wait_for
-
-
-def check_argocd_app_synced(app_name):
-    return json.loads(subprocess.check_output(f'argocd app get -o json {app_name}', shell=True))['status']['sync']['status'] == 'Synced'
-
-
-def argocd_app_terminate_op(app_name):
-    return subprocess.call(f'argocd app terminate-op {app_name}', shell=True) == 20
+from .common import argocd_app_diff_sync
 
 
 def argocd_app_git_hard_refresh_sync(app_name):
     subprocess.check_call(f'kubectl delete ns {app_name} --ignore-not-found --wait', shell=True)
-    subprocess.check_call(f'kubectl create ns {app_name}', shell=True)
     if app_name != 'tests-base':
-        subprocess.check_call(f'kubectl apply -n {app_name} -k kustomize/tests/argocd/base/namespaces/{app_name}', shell=True)
+        argocd_app_diff_sync(f'{app_name}-prepare')
     subprocess.check_call(f'kubectl delete job -lapp.kubernetes.io/instance={app_name} --ignore-not-found --wait', shell=True)
-    subprocess.check_call(f'argocd app diff --hard-refresh --exit-code=false {app_name}', shell=True)
-    wait_for(functools.partial(argocd_app_terminate_op, app_name), 60, f'argocd app {app_name} did not terminate')
-    subprocess.check_call(f'argocd app sync {app_name} --force --assumeYes --prune', shell=True)
-    check = functools.partial(check_argocd_app_synced, app_name)
-    wait_for(check, 240, f'argocd app {app_name} did not sync')
+    argocd_app_diff_sync(app_name)
 
 
 def assert_argocd_app_configmap(name, expected_configmap_changes):
@@ -69,44 +55,48 @@ def assert_argocd_app_configmap(name, expected_configmap_changes):
         'user.password': user['password'],
         'user_auth': f'admin:{user["password"]}',
         'nfs_initialized': '',
+        'vault_test_hello': 'world',
+        'vault_test_value': '1234',
         **expected_configmap_changes
     }
     assert actual_configmap == expected_configmap
+    return actual_configmap
 
 
-def assert_argocd_app_job(name, expected_nfs_init_job, expected_nfs_init_configmap):
+def assert_argocd_app_nfs_init_job(name, expected_nfs_init_configmap):
     jobs = json.loads(subprocess.check_output(f'kubectl get job -l app.kubernetes.io/instance={name} -o json', shell=True))['items']
-    if expected_nfs_init_job:
-        assert len(jobs) == 1
-        job = jobs[0]
-        assert job['status']['succeeded'] == 1
-        job_name = job['metadata']['name']
-        pods = json.loads(subprocess.check_output(f'kubectl get pod -l job-name={job_name} -o json', shell=True))['items']
-        assert len(pods) == 1
-        pod = pods[0]
-        assert pod['status']['phase'] == 'Succeeded'
-        pod_name = pod['metadata']['name']
-        logs = subprocess.check_output(f'kubectl logs {pod_name}', shell=True, text=True)
-        logs = logs.split('~~~~~~~~~~')
-        assert len(logs) == 4
-        assert logs[0].strip() == 'Hello from nfs init.sh', logs
-        assert logs[1].strip().startswith('/tmp/') and logs[1].strip().endswith('/.NFS_ID_RSA'), logs
-        assert logs[2].strip() == '---- NFS ID RSA ----', logs
-        assert logs[3].strip() == f'configmap/nfs-init {expected_nfs_init_configmap}\nrunning subgenerators...', logs
-    else:
-        assert len(jobs) == 0
+    assert len(jobs) > 0
+    for job in jobs:
+        if job['metadata']['name'].startswith(f'{name}-nfs-init'):
+            break
+    assert job['status']['succeeded'] == 1
+    job_name = job['metadata']['name']
+    pods = json.loads(subprocess.check_output(f'kubectl get pod -l job-name={job_name} -o json', shell=True))['items']
+    assert len(pods) == 1
+    pod = pods[0]
+    assert pod['status']['phase'] == 'Succeeded'
+    pod_name = pod['metadata']['name']
+    logs = subprocess.check_output(f'kubectl logs {pod_name}', shell=True, text=True)
+    logs = logs.split('~~~~~~~~~~')
+    assert len(logs) == 4
+    assert logs[0].strip() == 'Hello from nfs init.sh', logs
+    assert logs[1].strip().startswith('/tmp/') and logs[1].strip().endswith('/.NFS_ID_RSA'), logs
+    assert logs[2].strip() == '---- NFS ID RSA ----', logs
+    assert logs[3].strip() == f'configmap/nfs-init {expected_nfs_init_configmap}\nrunning subgenerators...', logs
 
 
 def assert_argocd_app(name, expected_configmap_changes=None, expected_testdep_source='tgz',
                       expected_nfs_init_job=True, expected_nfs_init_configmap='created'):
     try:
-        assert_argocd_app_configmap(name, expected_configmap_changes or {})
+        configmap = assert_argocd_app_configmap(name, expected_configmap_changes or {})
         assert expected_testdep_source == json.loads(subprocess.check_output(
             f'kubectl -n {name} get configmap testdep -o json', shell=True
         ))['data']['source']
-        assert_argocd_app_job(name, expected_nfs_init_job, expected_nfs_init_configmap)
+        if expected_nfs_init_job:
+            assert_argocd_app_nfs_init_job(name, expected_nfs_init_configmap)
     except Exception as e:
         raise Exception(f'Failed to assert argocd app {name}') from e
+    return configmap
 
 
 def test_base(argocd):
@@ -116,7 +106,7 @@ def test_base(argocd):
 
 def test_base_production(argocd):
     argocd_app_git_hard_refresh_sync('tests-base-production')
-    assert_argocd_app(
+    configmap = assert_argocd_app(
         'tests-base-production',
         expected_configmap_changes={
             'ARGOCD_ENV_ENVIRONMENT': 'production',
@@ -128,11 +118,32 @@ def test_base_production(argocd):
         },
         expected_nfs_init_configmap='configured'
     )
+    production, = get_vault_paths(['production'])
+    assert json.loads(base64.b64decode(production['alertmanager_secret'].encode()).decode()) == json.loads(configmap['alertmanager_secret'])
+
+
+def delete_vault_paths(paths):
+    for path in paths:
+        subprocess.call([
+            'kubectl', '-n', 'vault', 'exec', 'deploy/vault', '--', 'sh', '-c',
+            f'VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=$(cat /tmp/root_token) vault kv delete -mount=kv {path}'
+        ])
+
+
+def get_vault_paths(paths):
+    res = []
+    for path in paths:
+        res.append(json.loads(subprocess.check_output([
+            'kubectl', '-n', 'vault', 'exec', 'deploy/vault', '--', 'sh', '-c',
+            f'VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN=$(cat /tmp/root_token) vault kv get -mount=kv -format=json {path}'
+        ]))['data']['data'])
+    return res
 
 
 def test_base_staging(argocd):
+    delete_vault_paths(['staging/alertmanager-httpauth', 'staging/nfs'])
     argocd_app_git_hard_refresh_sync('tests-base-staging')
-    assert_argocd_app(
+    configmap = assert_argocd_app(
         'tests-base-staging',
         expected_configmap_changes={
             'ARGOCD_ENV_ENVIRONMENT': 'staging',
@@ -148,3 +159,10 @@ def test_base_staging(argocd):
         expected_testdep_source='chart',
         expected_nfs_init_job=False
     )
+    alertmanager_httpauth, nfs = get_vault_paths(['staging/alertmanager-httpauth', 'staging/nfs'])
+    assert alertmanager_httpauth == {
+        'auth': configmap['alertmanager_secret.auth'],
+        'password': configmap['alertmanager_secret.password'],
+        'user': 'admin'
+    }
+    assert nfs == {'ip': '1.2.3.4'}

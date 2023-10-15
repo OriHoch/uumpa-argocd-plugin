@@ -1,0 +1,5 @@
+- type: job
+  hook: PostSync
+  hook-delete-policy: BeforeHookCreation
+  name: vault-init
+  script: vault_init.sh

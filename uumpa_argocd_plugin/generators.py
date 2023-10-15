@@ -4,16 +4,17 @@ import importlib
 from . import config, common, env
 
 
-def process_generator(generator, data_, loaded_modules):
+def process_generator(generator, data_, loaded_modules, is_skipped=False):
     plugin = generator.get('plugin', 'uumpa_argocd_plugin.core')
     module = importlib.import_module(plugin)
     loaded_modules.add(module)
-    yield from module.process_generator(generator, data_)
+    yield from module.process_generator(generator, data_, is_skipped)
 
 
 def process_generators(generators, data_, loaded_modules):
     for generator in generators:
-        for item in process_generator(generator, data_, loaded_modules):
+        if_ = generator.get('if', None)
+        for item in process_generator(generator, data_, loaded_modules, is_skipped=not common.process_if(if_, data_)):
             if list(item.keys()) == ['generator']:
                 yield from process_generators([item['generator']], data_, loaded_modules)
             else:

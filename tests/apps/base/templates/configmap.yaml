@@ -28,3 +28,5 @@ data:
   user.password: "~user.password~"
   user_auth: "~user_auth~"
   server: "{{ .Values.server }}"
+  vault_test_value: "~vault_test.value~"
+  vault_test_hello: "~vault_test.hello~"

@@ -11,11 +11,42 @@ from textwrap import dedent
 PORT_FORWARD = None
 PORT_FORWARD_PORT = None
 ARGOCD_PASSWORD = None
+VAULT_PORT_FORWARD = None
+VAULT_PORT_FORWARD_PORT = None
+VAULT_ROOT_TOKEN = None
 
 
 def check_argocd_login():
     global PORT_FORWARD_PORT, ARGOCD_PASSWORD
     return subprocess.call(f'argocd login --insecure localhost:{PORT_FORWARD_PORT} --username admin --password {ARGOCD_PASSWORD}', shell=True) == 0
+
+
+def vault_port_forward_start():
+    global VAULT_PORT_FORWARD, VAULT_PORT_FORWARD_PORT, VAULT_ROOT_TOKEN
+    if os.environ.get('VAULT_PORT_FORWARD_PORT'):
+        VAULT_PORT_FORWARD_PORT = os.environ['VAULT_PORT_FORWARD_PORT']
+    else:
+        VAULT_PORT_FORWARD_PORT = '8200'
+        cmd = ['kubectl', '-n', 'vault', 'port-forward', 'svc/vault', '8200:8200']
+        port_forward_exists = False
+        if os.environ.get('PORT_FORWARDS_KEEP'):
+            for line in subprocess.check_output(['ps', 'aux']).decode('utf-8').splitlines():
+                if ' '.join(cmd) in line:
+                    port_forward_exists = True
+                    break
+        if not port_forward_exists:
+            VAULT_PORT_FORWARD = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    VAULT_ROOT_TOKEN = subprocess.check_output('kubectl -n vault exec deploy/vault -- cat /tmp/root_token', shell=True, text=True).strip()
+
+
+def vault_port_forward_stop():
+    global VAULT_PORT_FORWARD, VAULT_PORT_FORWARD_PORT, VAULT_ROOT_TOKEN
+    if os.environ.get('PORT_FORWARDS_KEEP'):
+        print('Keeping Vault port-forward running for debugging')
+        print(f'Login to vault at http://localhost:{VAULT_PORT_FORWARD_PORT} with root token "{VAULT_ROOT_TOKEN}"')
+    elif VAULT_PORT_FORWARD:
+        print('Killing Vault port-forward, to keep it running set env var PORT_FORWARDS_KEEP=1')
+        VAULT_PORT_FORWARD.kill()
 
 
 def argocd_login():
@@ -27,7 +58,7 @@ def argocd_login():
         PORT_FORWARD_PORT = '8080'
         cmd = ['kubectl', 'port-forward', 'svc/argocd-server', '8080:443']
         port_forward_exists = False
-        if os.environ.get('ARGOCD_PORT_FORWARD_KEEP'):
+        if os.environ.get('PORT_FORWARDS_KEEP'):
             for line in subprocess.check_output(['ps', 'aux']).decode('utf-8').splitlines():
                 if ' '.join(cmd) in line:
                     port_forward_exists = True
@@ -44,11 +75,11 @@ def argocd_login():
 
 def argocd_login_cleanup():
     global PORT_FORWARD, PORT_FORWARD_PORT, ARGOCD_PASSWORD
-    if os.environ.get('ARGOCD_PORT_FORWARD_KEEP'):
-        print('Keeping port-forward running for debugging')
+    if os.environ.get('PORT_FORWARDS_KEEP'):
+        print('Keeping ArgoCD port-forward running for debugging')
         print(f'Login to argocd at http://localhost:{PORT_FORWARD_PORT} with username "admin" and password "{ARGOCD_PASSWORD}"')
     elif PORT_FORWARD:
-        print('Killing port-forward, to keep it running set env var ARGOCD_PORT_FORWARD_KEEP=1')
+        print('Killing ArgoCD port-forward, to keep it running set env var PORT_FORWARDS_KEEP=1')
         PORT_FORWARD.kill()
 
 
@@ -121,4 +152,21 @@ def install_argocd(argocd_kustomize_dir):
     wait_for_argocd_crds()
     for path in glob.glob(os.path.join('kustomize', 'tests', 'argocd', argocd_kustomize_dir, 'apps', '*.yaml')):
         subprocess.check_call(['kubectl', 'apply', '-n', 'argocd', '-f', path])
-    subprocess.check_call('kubectl apply -n default -k kustomize/tests/argocd/base/namespaces/default', shell=True)
+
+
+def verify_argocd_app_synced(app_name):
+    subprocess.check_call(f'argocd app sync {app_name} --force --assumeYes --prune', shell=True)
+    return json.loads(subprocess.check_output(f'argocd app get -o json {app_name}', shell=True))['status']['sync']['status'] == 'Synced'
+
+
+def argocd_app_terminate_op(app_name):
+    return subprocess.call(f'argocd app terminate-op {app_name}', shell=True) == 20
+
+
+def argocd_app_diff_sync(app_name):
+    subprocess.check_call(f'argocd app diff --hard-refresh --exit-code=false {app_name}', shell=True)
+    print(f'Waiting for argocd app {app_name} to terminate any previous op...')
+    wait_for(functools.partial(argocd_app_terminate_op, app_name), 60, f'argocd app {app_name} did not terminate')
+    check = functools.partial(verify_argocd_app_synced, app_name)
+    print(f'Waiting for argocd app {app_name} to sync...')
+    wait_for(check, 10, f'argocd app {app_name} did not sync')

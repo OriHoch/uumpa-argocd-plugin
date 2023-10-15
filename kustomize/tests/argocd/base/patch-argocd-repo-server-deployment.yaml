@@ -7,12 +7,15 @@ spec:
     spec:
       containers:
         - name: uumpa
+          # you should pin the image to a specific sha256 commit hash from orihoch/uumpa-argocd-plugin repo
+          # change `latest` to the latest commit hash
           image: ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest
           env:
-            - name: PYTHONDONTWRITEBYTECODE
-              value: "1"
+            # you can add env vars to be used later by the plugin
             - name: DOMAIN_SUFFIX
               value: "global.example.com"
+            - name: ARGOCD_ENV_VAULT_ADDR
+              value: http://vault.vault:8200
 # following lines are for local development, if you want to test the specific image, remove them  ---snip---
           volumeMounts:
             - mountPath: /srv

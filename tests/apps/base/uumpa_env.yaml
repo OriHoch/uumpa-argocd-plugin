@@ -18,4 +18,21 @@
 - name: INIT_HELM_DEPENDENCY_BUILD
   valueIf:
     "ARGOCD_ENV_ENVIRONMENT == 'staging'": "true"
+# can define values from data definitions, following examples sets env vars based on secrets
+# see uumpa_data section below for more details and available functionality, however note that
+# the functionality here is limited to setting env vars only without having access to other data set in uumpa_data
+- name: VAULT_ROLE_ID
+  value:
+    type: secret
+    namespace: vault
+    name: vault-approle
+    key: role_id
+- name: VAULT_SECRET_ID
+  value:
+    type: secret
+    namespace: vault
+    name: vault-approle
+    key: secret_id
+- name: VAULT_PATH
+  value: kv/data
 # -- END SNIPPET --

@@ -59,27 +59,32 @@ def run_job_subgenerators(job_status, generator, data_, dry_run):
             subprocess.run(['kubectl', 'apply', '-f', '-'], input=json.dumps(item), text=True, check=True)
 
 
+def run_job_process_env(file_paths, tmpdir, job_files_b64, generator_env, data_):
+    for i, file_path in enumerate(file_paths):
+        os.makedirs(os.path.dirname(os.path.join(tmpdir, file_path)), exist_ok=True)
+        with open(os.path.join(tmpdir, file_path), 'w') as f:
+            f.write(base64.b64decode(job_files_b64[f'file_{i}']).decode())
+    env_ = {}
+    for k, v in generator_env.items():
+        v = common.render(v, data_)
+        if v.startswith('FILE::'):
+            env_[k] = os.path.join(tmpdir, f'.{k}')
+            with open(os.path.join(tmpdir, f'.{k}'), 'w') as f:
+                f.write(v[6:])
+            os.chmod(os.path.join(tmpdir, f'.{k}'), 0o600)
+        else:
+            env_[k] = v
+    return env_
+
+
 def run_job(job, job_files_b64, generator, data_, dry_run=False):
     with tempfile.TemporaryDirectory() as tmpdir:
-        for i, file_path in enumerate(job.get('file_paths', [])):
-            os.makedirs(os.path.dirname(os.path.join(tmpdir, file_path)), exist_ok=True)
-            with open(os.path.join(tmpdir, file_path), 'w') as f:
-                f.write(base64.b64decode(job_files_b64[f'file_{i}']).decode())
-        env = {}
-        for k, v in generator.get('env', {}).items():
-            v = common.render(v, data_)
-            if v.startswith('FILE::'):
-                env[k] = os.path.join(tmpdir, f'.{k}')
-                with open(os.path.join(tmpdir, f'.{k}'), 'w') as f:
-                    f.write(v[6:])
-                os.chmod(os.path.join(tmpdir, f'.{k}'), 0o600)
-            else:
-                env[k] = v
+        env_ = run_job_process_env(job.get('file_paths', []), tmpdir, job_files_b64, generator.get('env', {}), data_)
         if generator.get('script'):
             assert not generator.get('python-module-function')
-            run_job_script(generator, tmpdir, env, dry_run)
+            run_job_script(generator, tmpdir, env_, dry_run)
         elif generator.get('python-module-function'):
-            run_job_python(generator, tmpdir, env, dry_run)
+            run_job_python(generator, tmpdir, env_, dry_run)
         else:
             raise ValueError(f'Job has neither script nor python-module-function: {generator}')
 

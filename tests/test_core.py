@@ -72,7 +72,10 @@ def test_process_value_httpauth():
     data = {}
     with patch('subprocess.check_output', return_value='encrypted_auth') as mock_check_output:
         core.process_value_httpauth('auth', {'user': 'admin', 'password': '123456'}, data)
-        mock_check_output.assert_called_once_with(['htpasswd', '-bc', '/dev/stdout', 'admin', '123456'], text=True)
+        mock_check_output.assert_called_once_with(
+            ['htpasswd', '-bc', '/dev/stdout', 'admin', '123456'],
+            text=True, stderr=subprocess.DEVNULL
+        )
     assert data['auth'] == 'encrypted_auth'
 
 

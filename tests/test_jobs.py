@@ -20,7 +20,7 @@ def test_run_argocd():
                 ls -lah $NFS_ID_RSA_FILE > {tmpdir}/__nfs_id_rsa_file_ls
             ''').strip().encode()).decode())
         with patch('subprocess.run') as mock_run:
-            jobs.run_argocd(
+            jobs.main(
                 base64.b64encode(json.dumps({
                     "generator": {
                         "if": 'nfs_initialized != "yes"',

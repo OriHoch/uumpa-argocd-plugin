@@ -7,9 +7,7 @@ import traceback
 import importlib
 import subprocess
 
-from ruamel.yaml import safe_load
-
-from . import data, generators, common, env
+from . import generators, common
 
 
 def dry_run_print_dir(tmpdir):
@@ -101,31 +99,53 @@ def _run_job(job, job_files_b64, generator, data_, dry_run=False):
     return job_status == 'success'
 
 
-def run_local(namespace_name, chart_path, *args):
-    env.update_env(chart_path)
-    dry_run = '--dry-run' in args
-    data_ = data.process(namespace_name, chart_path)
-    job_files_b64 = {}
-    jobs = {}
-    for item in generators.process(data_):
-        item = safe_load(item)
-        item_type = item.get('metadata', {}).get('labels', {}).get('uumpa.argocd.plugin/item-type')
-        if item_type == 'job-files':
-            job_files_b64[item['metadata']['name']] = item['data']
-        elif item_type == 'job':
-            jobs[item['metadata']['generateName']] = json.loads(base64.b64decode(item['spec']['template']['spec']['containers'][0]['args'][1].encode()))
-    has_failures = False
-    for job_name, job in jobs.items():
-        print(f'Running job {job_name}...')
-        data_ = job.get('data', {})
-        generator = job['generator']
-        if not _run_job(job, job_files_b64.get(f'{job_name}-files', {}), generator, data_, dry_run=dry_run):
-            has_failures = True
-    if has_failures:
-        raise Exception('Some jobs failed')
+def main_local(generate_output, dry_run=False):
+    print(f'---\nRunning Jobs... (dry_run={dry_run})')
+    presync_uumpa_jobs = []
+    sync_uumpa_jobs = []
+    postsync_uumpa_jobs = []
+    job_files_data = {}
+    for item in common.yaml_load_all(generate_output):
+        labels = (item or {}).get('metadata', {}).get('labels', {})
+        annotations = (item or {}).get('metadata', {}).get('annotations', {})
+        item_type = labels.get('uumpa.argocd.plugin/item-type')
+        if item_type == 'job':
+            hook = annotations.get('argocd.argoproj.io/hook')
+            if hook == 'PreSync':
+                presync_uumpa_jobs.append(item)
+            elif hook == 'Sync':
+                sync_uumpa_jobs.append(item)
+            elif hook == 'PostSync':
+                postsync_uumpa_jobs.append(item)
+            elif hook not in ['Skip', None]:
+                raise ValueError(f'Unsupported hook: {hook}')
+        elif item_type == 'job-files':
+            job_files_data[item['metadata']['name']] = item['data']
+        elif item_type is not None:
+            raise ValueError(f'Unsupported item type: {item_type}')
+    uumpa_jobs = presync_uumpa_jobs + sync_uumpa_jobs + postsync_uumpa_jobs
+    print(f'Found {len(uumpa_jobs)} uumpa jobs to run')
+    for uumpa_job in uumpa_jobs:
+        name = uumpa_job['metadata']['generateName']
+        files_data = job_files_data.get(f'{name}-files', {})
+        assert uumpa_job['spec']['template']['spec']['containers'][0]['command'] == ['uumpa-argocd-plugin']
+        args = uumpa_job['spec']['template']['spec']['containers'][0]['args']
+        assert len(args) == 2
+        assert args[0] == 'run-generator-job'
+        job_json_b64 = args[1]
+        print(f'Running job: {name}...')
+        job = json.loads(base64.b64decode(job_json_b64).decode())
+        if dry_run:
+            print(json.dumps(job, indent=2))
+        else:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                for file_name, file_contents in files_data.items():
+                    with open(os.path.join(tmpdir, file_name), 'w') as f:
+                        f.write(file_contents)
+                main(job_json_b64, uumpa_job_files_path=tmpdir)
 
 
-def run_argocd(job_json_b64, uumpa_job_files_path='/var/uumpa-job-files'):
+def main(job_json_b64, uumpa_job_files_path='/var/uumpa-job-files'):
     job = json.loads(base64.b64decode(job_json_b64).decode())
     generator = job['generator']
     data_ = job['data']

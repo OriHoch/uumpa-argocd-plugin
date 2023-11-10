@@ -12,7 +12,8 @@ def process_init_plugin_function(init_plugin_function, chart_path):
     getattr(importlib.import_module(module), function)(chart_path)
 
 
-def init(chart_path):
+def main(chart_path=None):
+    chart_path = chart_path or os.getcwd()
     env.update_env(chart_path)
     print(f'init: {chart_path}')
     if config.ARGOCD_ENV_INIT_PLUGIN_FUNCTIONS:
@@ -22,12 +23,3 @@ def init(chart_path):
     else:
         print('No init functions to run')
     print("OK")
-
-
-def init_local(chart_path):
-    init(chart_path)
-
-
-def init_argocd():
-    chart_path = os.getcwd()
-    init(chart_path)

@@ -47,17 +47,36 @@ def vault_init(env=None):
 
 
 def vault_set(token, addr, data_path_prefix, path, data):
-    res = requests.post(
+    res = requests.get(
         os.path.join(addr, 'v1', data_path_prefix, path),
         headers={
             'Content-Type': 'application/json',
             'X-Vault-Token': token
-        },
-        data=json.dumps({
-            'data': data
-        })
+        }
     )
-    res.raise_for_status()
+    if res.status_code == 200:
+        cur_data = res.json()['data']
+        cur_version, cur_data = cur_data['metadata']['version'], cur_data['data']
+    elif res.status_code == 404:
+        cur_version, cur_data = (res.json().get('data', {}).get('metadata', {}).get('version') or 0), {}
+    else:
+        raise Exception(f"Failed to get vault path: {path}\n{res.status_code} {res.content}")
+    # compare cur_data with data
+    if cur_data != data:
+        res = requests.post(
+            os.path.join(addr, 'v1', data_path_prefix, path),
+            headers={
+                'Content-Type': 'application/json',
+                'X-Vault-Token': token
+            },
+            data=json.dumps({
+                'data': data,
+                'options': {
+                    'cas': cur_version
+                }
+            })
+        )
+        res.raise_for_status()
 
 
 def run_generator_job(tmpdir, env):

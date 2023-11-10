@@ -20,7 +20,7 @@ def test_generate_local():
         sys.stdout = new_stdout
         try:
             with patch('subprocess.check_output', return_value='kind: Mock\n---\nkind: Mock2\n') as mock_check_output:
-                generate.generate_local('my_namespace', tmpdir, '--include-crds')
+                generate.main(namespace='my_namespace', chart_path=tmpdir, helm_args='--include-crds')
                 mock_check_output.assert_called_once_with(
                     'helm template . --namespace my_namespace --include-crds',
                     shell=True, text=True, cwd=tmpdir
@@ -61,9 +61,9 @@ def test_generate_argocd():
         sys.stdout = new_stdout
         try:
             with patch('subprocess.check_output', return_value='kind: Mock\n---\nkind: Mock2\n') as mock_check_output:
-                generate.generate_argocd()
+                generate.main()
                 mock_check_output.assert_called_once_with(
-                    'helm template . --name-template my_app --namespace my_namespace '
+                    'helm template . --namespace my_namespace --name-template my_app '
                     '--kube-version 1.16.0 --api-versions apps/v1 --api-versions extensions/v1beta1 '
                     '--include-crds --do-something-else',
                     shell=True, text=True, cwd=tmpdir

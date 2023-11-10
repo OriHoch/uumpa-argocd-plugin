@@ -48,3 +48,12 @@ pytest -svvx tests/test_e2e.py
 ```
 
 The final log line will contain the login details
+
+Code changes will automatically be reloaded in the test cluster, but if you made changes
+to requirements or the Dockerfile, you will need to rebuild the image and restart the deployment:
+
+```
+docker build -t ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest .
+kind load docker-image ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest
+kubectl rollout restart deployment/argocd-repo-server -n argocd
+```

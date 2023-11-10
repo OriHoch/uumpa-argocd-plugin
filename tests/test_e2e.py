@@ -65,26 +65,30 @@ def assert_argocd_app_configmap(name, expected_configmap_changes):
     return actual_configmap
 
 
-def assert_argocd_app_nfs_init_job(name, expected_nfs_init_configmap):
+def assert_argocd_app_jobs(name, expected_nfs_init_configmap, expected_nfs_init_job):
     jobs = json.loads(subprocess.check_output(f'kubectl get job -l app.kubernetes.io/instance={name} -o json', shell=True))['items']
     assert len(jobs) > 0
+    nfs_init_job = None
     for job in jobs:
+        assert job['status']['active'] == 0, f'Job {job["metadata"]["name"]} is still active'
         if job['metadata']['name'].startswith(f'{name}-nfs-init'):
-            break
-    assert job['status']['succeeded'] == 1
-    job_name = job['metadata']['name']
-    pods = json.loads(subprocess.check_output(f'kubectl get pod -l job-name={job_name} -o json', shell=True))['items']
-    assert len(pods) == 1
-    pod = pods[0]
-    assert pod['status']['phase'] == 'Succeeded'
-    pod_name = pod['metadata']['name']
-    logs = subprocess.check_output(f'kubectl logs {pod_name}', shell=True, text=True)
-    logs = logs.split('~~~~~~~~~~')
-    assert len(logs) == 4
-    assert logs[0].strip() == 'Hello from nfs init.sh', logs
-    assert logs[1].strip().startswith('/tmp/') and logs[1].strip().endswith('/.NFS_ID_RSA'), logs
-    assert logs[2].strip() == '---- NFS ID RSA ----', logs
-    assert logs[3].strip() == f'configmap/nfs-init {expected_nfs_init_configmap}\nrunning subgenerators...', logs
+            nfs_init_job = job
+    if expected_nfs_init_job:
+        job = nfs_init_job
+        assert job['status']['succeeded'] == 1
+        job_name = job['metadata']['name']
+        pods = json.loads(subprocess.check_output(f'kubectl get pod -l job-name={job_name} -o json', shell=True))['items']
+        assert len(pods) == 1
+        pod = pods[0]
+        assert pod['status']['phase'] == 'Succeeded'
+        pod_name = pod['metadata']['name']
+        logs = subprocess.check_output(f'kubectl logs {pod_name}', shell=True, text=True)
+        logs = logs.split('~~~~~~~~~~')
+        assert len(logs) == 4
+        assert logs[0].strip() == 'Hello from nfs init.sh', logs
+        assert logs[1].strip().startswith('/tmp/') and logs[1].strip().endswith('/.NFS_ID_RSA'), logs
+        assert logs[2].strip() == '---- NFS ID RSA ----', logs
+        assert logs[3].strip() == f'configmap/nfs-init {expected_nfs_init_configmap}\nrunning subgenerators...', logs
 
 
 def assert_argocd_app(name, expected_configmap_changes=None, expected_testdep_source='tgz',
@@ -95,7 +99,7 @@ def assert_argocd_app(name, expected_configmap_changes=None, expected_testdep_so
             f'kubectl -n {name} get configmap testdep -o json', shell=True
         ))['data']['source']
         if expected_nfs_init_job:
-            assert_argocd_app_nfs_init_job(name, expected_nfs_init_configmap)
+            assert_argocd_app_jobs(name, expected_nfs_init_configmap, expected_nfs_init_job)
     except Exception as e:
         raise Exception(f'Failed to assert argocd app {name}') from e
     return configmap

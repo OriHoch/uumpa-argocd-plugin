@@ -21,13 +21,23 @@ def main():
 @click.option('--dry-run', is_flag=True,
               help="Don't perform any actions, just print the output (relevant only when running jobs)")
 def generate(**kwargs):
+    """Generate manifests for the given chart"""
     from . import generate
     generate.main(**kwargs)
 
 
 @main.command()
+@click.argument('job-json-b64')
+def run_generator_job(job_json_b64):
+    """Internal command to run a generator job from within the job container, for testing call generate with --run-jobs"""
+    from . import jobs
+    jobs.main(job_json_b64)
+
+
+@main.command()
 @click.option('--chart-path', help='Path to the chart (defaults to current directory)')
 def init(**kwargs):
+    """Initialize the given chart - called by ArgoCD before running generate"""
     from . import init
     init.main(**kwargs)
 

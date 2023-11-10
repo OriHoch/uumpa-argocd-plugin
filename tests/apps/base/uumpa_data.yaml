@@ -23,27 +23,31 @@
     type: secret
     name: alertmanager-httpauth
     keys: [auth, password]
+- # need to set default values for fields which are later used in conditionals, otherwise they will raise an error
+  alertmanager_secret_new_password: ""
 - # if statements are Python code which has access to all the data from the previous items as local variables
   # the specified values will be set only if the condition is met
-  if: not alertmanager_secret.auth or not alertmanager_secret.password
-  # generate an httpauth string which can be used for nginx ingress auth
+  if: not alertmanager_secret.password or not alertmanager_secret.auth
+  # generate a new password
+  # make sure to always include dynamically created data under an if condition as shown above
+  # otherwise a new password will be generated every time you sync the app
+  alertmanager_secret_new_password:
+    type: password
+    length: 18
+- if: alertmanager_secret_new_password
+  # only if a new password was generated, change the alertmanager_secret values
+  alertmanager_secret.password: ~alertmanager_secret_new_password~
   alertmanager_secret.auth:
     type: httpauth
     user: ~alertmanager_user~
-    password: ~alertmanager_secret.password~
-  # generate a password, set it as a value in the alertmanager_secret map object
-  alertmanager_secret.password:
-    type: password
-    length: 18
+    password: ~alertmanager_secret_new_password~
 - nfs_initialized:
     type: configmap
     name: nfs-init
     key: initialized
-- # can also set values to objects, in this case data will contain a user object with name and password fields
+- # In this case a new user object will be created in the data with the given fields
   user.name: admin
-  user.password:
-    type: password
-    length: 18
+  user.password: password
 # this object can then be used in templates or other fields
 - user_auth: ~user.name~:~user.password~
 # example of using the vault plugin, see below regarding how to install and use plugins

@@ -28,10 +28,12 @@ def assert_argocd_app_configmap(name, expected_configmap_changes):
         "password": alertmanager_secret_password
     }
     user_json = actual_configmap.pop('user')
+    assert user_json == '{"name": "admin", "password": "password"}' or user_json == '{"password": "password", "name": "admin"}', user_json
     user = json.loads(user_json)
-    assert set(user.keys()) == {'name', 'password'}
-    assert user['name'] == 'admin'
-    assert len(user['password']) > 8
+    assert user == {
+        'name': 'admin',
+        'password': 'password',
+    }
     expected_configmap = {
         'ARGOCD_ENV_ALERTMANAGER_USER': 'admin',
         'ARGOCD_ENV_DOMAIN_SUFFIX': 'local.example.com',

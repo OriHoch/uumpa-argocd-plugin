@@ -113,7 +113,7 @@ def run_local(namespace_name, chart_path, *args):
         if item_type == 'job-files':
             job_files_b64[item['metadata']['name']] = item['data']
         elif item_type == 'job':
-            jobs[item['metadata']['generateName']] = json.loads(item['spec']['template']['spec']['containers'][0]['args'][1])
+            jobs[item['metadata']['generateName']] = json.loads(base64.b64decode(item['spec']['template']['spec']['containers'][0]['args'][1].encode()))
     has_failures = False
     for job_name, job in jobs.items():
         print(f'Running job {job_name}...')

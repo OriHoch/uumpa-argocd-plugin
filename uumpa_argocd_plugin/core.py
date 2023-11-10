@@ -34,7 +34,9 @@ def process_value_password(key, value, data_):
 def process_value_httpauth(key, value, data_):
     user = common.render(value['user'], data_)
     password = common.render(value['password'], data_)
-    data_[key] = subprocess.check_output(['htpasswd', '-bc', '/dev/stdout', user, password], text=True).strip()
+    data_[key] = subprocess.check_output(
+        ['htpasswd', '-bc', '/dev/stdout', user, password], text=True, stderr=subprocess.DEVNULL
+    ).strip()
 
 
 def process_value(key, value, data_):

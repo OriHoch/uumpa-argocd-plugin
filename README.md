@@ -51,6 +51,23 @@ You can define additional env vars in the chart path at `uumpa_env.yaml`, for ex
 - name: INIT_HELM_DEPENDENCY_BUILD
   valueIf:
     "ARGOCD_ENV_ENVIRONMENT == 'staging'": "true"
+# can define values from data definitions, following examples sets env vars based on secrets
+# see uumpa_data section below for more details and available functionality, however note that
+# the functionality here is limited to setting env vars only without having access to other data set in uumpa_data
+- name: VAULT_ROLE_ID
+  value:
+    type: secret
+    namespace: vault
+    name: vault-approle
+    key: role_id
+- name: VAULT_SECRET_ID
+  value:
+    type: secret
+    namespace: vault
+    name: vault-approle
+    key: secret_id
+- name: VAULT_PATH
+  value: kv/data
 ```
 
 The basic functionality allows to get values from different sources and use them in the Helm chart, this is done
@@ -81,29 +98,38 @@ by creating file `uumpa_data.yaml` in the chart root directory:
     type: secret
     name: alertmanager-httpauth
     keys: [auth, password]
+- # need to set default values for fields which are later used in conditionals, otherwise they will raise an error
+  alertmanager_secret_new_password: ""
 - # if statements are Python code which has access to all the data from the previous items as local variables
   # the specified values will be set only if the condition is met
-  if: not alertmanager_secret.auth or not alertmanager_secret.password
-  # generate an httpauth string which can be used for nginx ingress auth
+  if: not alertmanager_secret.password or not alertmanager_secret.auth
+  # generate a new password
+  # make sure to always include dynamically created data under an if condition as shown above
+  # otherwise a new password will be generated every time you sync the app
+  alertmanager_secret_new_password:
+    type: password
+    length: 18
+- if: alertmanager_secret_new_password
+  # only if a new password was generated, change the alertmanager_secret values
+  alertmanager_secret.password: ~alertmanager_secret_new_password~
   alertmanager_secret.auth:
     type: httpauth
     user: ~alertmanager_user~
-    password: ~alertmanager_secret.password~
-  # generate a password, set it as a value in the alertmanager_secret map object
-  alertmanager_secret.password:
-    type: password
-    length: 18
+    password: ~alertmanager_secret_new_password~
 - nfs_initialized:
     type: configmap
     name: nfs-init
     key: initialized
-- # can also set values to objects, in this case data will contain a user object with name and password fields
+- # In this case a new user object will be created in the data with the given fields
   user.name: admin
-  user.password:
-    type: password
-    length: 18
+  user.password: password
 # this object can then be used in templates or other fields
 - user_auth: ~user.name~:~user.password~
+# example of using the vault plugin, see below regarding how to install and use plugins
+- vault_test:
+    plugin: uumpa_argocd_plugin.plugins.vault
+    path: test
+    keys: [value, hello]
 ```
 
 The same string templating will also be applied to the resulting templates from the Helm chart, so you can include
@@ -125,7 +151,7 @@ This is done in the `uumpa_generators.yaml` file:
   if: not nfs_initialized
   type: job
   # Following 2 values are the same as the ArgoCD hook attributes, see https://argo-cd.readthedocs.io/en/stable/user-guide/resource_hooks/
-  hook: PreSync
+  hook: Sync
   hook-delete-policy: BeforeHookCreation
   name: nfs-init
   # path to the script to run relative to the chart root, script should have a shebang line specifying the interpreter
@@ -140,6 +166,24 @@ This is done in the `uumpa_generators.yaml` file:
       name: nfs-init
       data:
         initialized: "true"
+# example of using a plugin, see below for more details regarding plugins
+- if: ARGOCD_ENV_ENVIRONMENT == 'staging'
+  plugin: uumpa_argocd_plugin.plugins.vault
+  name: vault
+  vault:
+    staging/alertmanager-httpauth:
+      auth: "~alertmanager_secret.auth~"
+      user: "~alertmanager_user~"
+      password: "~alertmanager_secret.password~"
+    staging/nfs:
+      ip: "~nfs_ip~"
+- if: ARGOCD_ENV_ENVIRONMENT == 'production'
+  plugin: uumpa_argocd_plugin.plugins.vault
+  name: vault
+  vault:
+    production:
+      # because alertmanager_secret is json, we use a base64 encoded value to avoid issues with json encoding/decoding
+      alertmanager_secret: ~alertmanager_secret:base64~
 ```
 
 ## Plugins
@@ -285,7 +329,7 @@ Runs a script using the same image and configuration as the Uumpa argocd plugin 
 | Name                   | Description                                                                                                       | Default                            |
 |------------------------|-------------------------------------------------------------------------------------------------------------------|------------------------------------|
 | type                   | `job`                                                                                                             | -                                  |
-| hook                   | ArgoCD hook to run the job as, see https://argo-cd.readthedocs.io/en/stable/user-guide/resource_hooks/            | PreSync                            |
+| hook                   | ArgoCD hook to run the job as, see https://argo-cd.readthedocs.io/en/stable/user-guide/resource_hooks/            | Sync                            |
 | hook-delete-policy     | ArgoCD hook delete policy, see https://argo-cd.readthedocs.io/en/stable/user-guide/resource_hooks/                | BeforeHookCreation                 |
 | name                   | Name of the hook, required for identification, must be valid for Kubernetes job / configmap name                  | -                                  |
 | script                 | Path to script relative to the chart root, script will run as executable so make sure it has a shebang            | -                                  |
@@ -379,14 +423,15 @@ def process_value(key, value, data):
     common.process_keyed_value(secret_data, key, value, data)
 ```
 
-#### `process_generator(generator, data)`
+#### `process_generator(generator, data, is_skipped)`
 
 ##### Arguments
 
-| Name      | Type | Description                  |
-|-----------|------|------------------------------|
-| generator | dict | the generator definition     |
-| data      | dict | the uumpa argocd plugin data |
+| Name       | Type | Description                                                      |
+|------------|------|------------------------------------------------------------------|
+| generator  | dict | the generator definition                                         |
+| data       | dict | the uumpa argocd plugin data                                     |
+| is_skipped | bool | True if the generator should be skipped due to it's if condition |
 
 ##### Proess
 
@@ -398,6 +443,9 @@ Generators need to be yielded as a dict containing a single attribute `generator
 
 Generators should not modify the `data` dict, and can assume all values are already rendered, so no need to call
 `common.render` on them like in the `process_value` function.
+
+If the `is_skipped` argument is True, the generator should not perform its main functionality, but can still yield items
+if needed.
 
 ##### Example
 

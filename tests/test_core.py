@@ -150,7 +150,7 @@ def test_process_generator_job():
         'apiVersion': 'batch/v1',
         'kind': 'Job',
         'metadata': {
-            'generateName': 'my_namespace-my_hook',
+            'name': 'my_namespace-my_hook',
             'namespace': 'argocd',
             'annotations': {
                 'argocd.argoproj.io/hook': 'Sync',

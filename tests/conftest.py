@@ -1,21 +1,27 @@
-import subprocess
-
+import os
 import pytest
 
-from .common import (
-    install_argocd, argocd_login, argocd_update_git, argocd_login_cleanup, argocd_app_diff_sync,
-    vault_port_forward_start, vault_port_forward_stop
-)
+from . import common
+from uumpa_argocd_plugin import observability
 
 
 @pytest.fixture(scope="session")
-def argocd(request):
-    install_argocd('base')
-    argocd_login()
-    request.addfinalizer(argocd_login_cleanup)
-    argocd_update_git()
-    subprocess.check_call(f'kubectl delete job -lapp.kubernetes.io/instance=vault --ignore-not-found --wait', shell=True)
-    argocd_app_diff_sync('vault')
-    argocd_app_diff_sync('default')
-    vault_port_forward_start()
-    request.addfinalizer(vault_port_forward_stop)
+def observability_span_session():
+    observability.init()
+    with observability.start_as_current_span('pytest_session') as span:
+        yield span
+
+
+@pytest.fixture(autouse=True)
+def observability_span_function(request, observability_span_session):
+    with observability.start_as_current_span(f'{request.module.__name__}.{request.function.__name__}') as span:
+        yield span
+
+
+@pytest.fixture(scope="session")
+def start_infra():
+    if os.environ.get('CI') == 'true':
+        with common.start_infra(with_observability=False, build=True, skip_create_cluster=False):
+            yield
+    else:
+        yield

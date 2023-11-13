@@ -5,24 +5,25 @@ import string
 import secrets
 import subprocess
 
-from . import common, config
+from . import common, config, observability
 
 
 def get_secret_configmap(type_, name, namespace):
+    ret = {}
     p = subprocess.run(['kubectl', 'get', type_, name, '-n', namespace, '-o', 'json'], capture_output=True, text=True)
     if p.returncode == 0:
-        return {
+        ret = {
             k: base64.b64decode(v).decode() if type_.startswith('secret') else v
             for k, v in json.loads(p.stdout)['data'].items()
         }
-    else:
-        return {}
+    return ret
 
 
 def process_value_secret_configmap(key, value, data_):
     namespace = common.render(value.get('namespace') or data_['__namespace_name'], data_)
     name = common.render(value['name'], data_)
     d = get_secret_configmap(value['type'], name, namespace)
+    observability.add_event('process_value_secret_configmap', attributes={'namespace': namespace, 'name': name, 'key': key, 'value': value, 'd': d})
     common.process_keyed_value(d, key, value, data_)
 
 
@@ -48,96 +49,99 @@ def process_value(key, value, data_):
 
 
 def process_generator_job(generator, data_, is_skipped=False):
-    if is_skipped:
-        job_status = 'skip'
-        for generator in generator['generators']:
-            if_ = generator.get('if', '_job_status in ["skip", "success"]')
-            if common.process_if(if_, {**data_, '_job_status': job_status}):
-                yield {'generator': generator}
-    else:
-        repo_server_deployment = json.loads(subprocess.check_output([
-            'kubectl', '-n', config.ARGOCD_NAMESPACE, 'get', 'deployment', config.ARGOCD_REPO_SERVER_DEPLOYMENT, '-o', 'json'
-        ], text=True))
-        repo_server_spec = repo_server_deployment['spec']['template']['spec']
-        repo_server_containers = [c for c in repo_server_spec['containers'] if c['name'] == config.ARGOCD_UUMPA_PLUGIN_CONTAINER]
-        container = repo_server_containers[0] if len(repo_server_containers) > 0 else {}
-        container['command'] = ['uumpa-argocd-plugin']
-        file_paths = []
-        files_configmap_data = {}
-        files = generator.get('files', [])
-        if generator.get('script'):
-            files = [generator['script'], *files]
-        for i, filepath in enumerate(files):
-            file_paths.append(filepath)
-            with open(os.path.join(data_['__chart_path'], filepath)) as f:
-                files_configmap_data[f'file_{i}'] = base64.b64encode(f.read().encode()).decode()
-        namespace_name = data_['__namespace_name']
-        hook_name = generator['name']
-        hook = generator.get('hook', 'PreSync')
-        hook_delete_policy = generator.get('hook-delete-policy', 'BeforeHookCreation')
-        volumes = repo_server_spec['volumes']
-        if len(file_paths) > 0:
-            volumes = [
-                *volumes,
-                {
-                    'name': 'uumpa-job-files',
-                    'configMap': {
-                        'name': f'{namespace_name}-{hook_name}-files'
+    with observability.start_as_current_span(process_generator_job, f'({generator.get("name")}', attributes={
+        'generator': generator, 'data': data_, 'is_skipped': is_skipped
+    }):
+        if is_skipped:
+            job_status = 'skip'
+            for generator in generator['generators']:
+                if_ = generator.get('if', '_job_status in ["skip", "success"]')
+                if common.process_if(if_, {**data_, '_job_status': job_status}):
+                    yield {'generator': generator}
+        else:
+            repo_server_deployment = json.loads(subprocess.check_output([
+                'kubectl', '-n', config.ARGOCD_NAMESPACE, 'get', 'deployment', config.ARGOCD_REPO_SERVER_DEPLOYMENT, '-o', 'json'
+            ], text=True))
+            repo_server_spec = repo_server_deployment['spec']['template']['spec']
+            repo_server_containers = [c for c in repo_server_spec['containers'] if c['name'] == config.ARGOCD_UUMPA_PLUGIN_CONTAINER]
+            container = repo_server_containers[0] if len(repo_server_containers) > 0 else {}
+            container['command'] = ['uumpa-argocd-plugin']
+            file_paths = []
+            files_configmap_data = {}
+            files = generator.get('files', [])
+            if generator.get('script'):
+                files = [generator['script'], *files]
+            for i, filepath in enumerate(files):
+                file_paths.append(filepath)
+                with open(os.path.join(data_['__chart_path'], filepath)) as f:
+                    files_configmap_data[f'file_{i}'] = base64.b64encode(f.read().encode()).decode()
+            namespace_name = data_['__namespace_name']
+            hook_name = generator['name']
+            hook = generator.get('hook', 'PreSync')
+            hook_delete_policy = generator.get('hook-delete-policy', 'BeforeHookCreation')
+            volumes = repo_server_spec['volumes']
+            if len(file_paths) > 0:
+                volumes = [
+                    *volumes,
+                    {
+                        'name': 'uumpa-job-files',
+                        'configMap': {
+                            'name': f'{namespace_name}-{hook_name}-files'
+                        }
                     }
+                ]
+                container.setdefault('volumeMounts', []).append({
+                    'name': 'uumpa-job-files',
+                    'mountPath': '/var/uumpa-job-files'
+                })
+                yield {
+                    'apiVersion': 'v1',
+                    'kind': 'ConfigMap',
+                    'metadata': {
+                        'name': f'{namespace_name}-{hook_name}-files',
+                        'namespace': config.ARGOCD_NAMESPACE,
+                        'annotations': {
+                            'argocd.argoproj.io/hook': hook,
+                            'argocd.argoproj.io/hook-delete-policy': hook_delete_policy,
+                        },
+                        'labels': {
+                            'uumpa.argocd.plugin/item-type': 'job-files'
+                        },
+                    },
+                    'data': files_configmap_data
                 }
-            ]
-            container.setdefault('volumeMounts', []).append({
-                'name': 'uumpa-job-files',
-                'mountPath': '/var/uumpa-job-files'
-            })
+            container['args'] = ['run-generator-job', base64.b64encode(json.dumps({
+                'generator': generator,
+                'data': data_,
+                'file_paths': file_paths
+            }).encode()).decode()]
             yield {
-                'apiVersion': 'v1',
-                'kind': 'ConfigMap',
+                'apiVersion': 'batch/v1',
+                'kind': 'Job',
                 'metadata': {
-                    'name': f'{namespace_name}-{hook_name}-files',
+                    'name': f'{namespace_name}-{hook_name}',
                     'namespace': config.ARGOCD_NAMESPACE,
                     'annotations': {
                         'argocd.argoproj.io/hook': hook,
                         'argocd.argoproj.io/hook-delete-policy': hook_delete_policy,
                     },
                     'labels': {
-                        'uumpa.argocd.plugin/item-type': 'job-files'
+                        'uumpa.argocd.plugin/item-type': 'job'
                     },
                 },
-                'data': files_configmap_data
-            }
-        container['args'] = ['run-generator-job', base64.b64encode(json.dumps({
-            'generator': generator,
-            'data': data_,
-            'file_paths': file_paths
-        }).encode()).decode()]
-        yield {
-            'apiVersion': 'batch/v1',
-            'kind': 'Job',
-            'metadata': {
-                'generateName': f'{namespace_name}-{hook_name}',
-                'namespace': config.ARGOCD_NAMESPACE,
-                'annotations': {
-                    'argocd.argoproj.io/hook': hook,
-                    'argocd.argoproj.io/hook-delete-policy': hook_delete_policy,
-                },
-                'labels': {
-                    'uumpa.argocd.plugin/item-type': 'job'
-                },
-            },
-            'spec': {
-                'template': {
-                    'spec': {
-                        'restartPolicy': 'Never',
-                        'automountServiceAccountToken': True,
-                        'serviceAccountName': repo_server_spec['serviceAccountName'],
-                        'tolerations': repo_server_spec.get('tolerations', []),
-                        'volumes': volumes,
-                        'containers': [container]
+                'spec': {
+                    'template': {
+                        'spec': {
+                            'restartPolicy': 'Never',
+                            'automountServiceAccountToken': True,
+                            'serviceAccountName': repo_server_spec['serviceAccountName'],
+                            'tolerations': repo_server_spec.get('tolerations', []),
+                            'volumes': volumes,
+                            'containers': [container]
+                        }
                     }
                 }
             }
-        }
 
 
 def process_generator_secret_configmap(type_, generator, data_):

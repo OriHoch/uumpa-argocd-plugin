@@ -10,6 +10,12 @@ pip install -e .
 
 ## Tests
 
+Install test dependencies:
+
+```bash
+pip install -r tests/requirements.txt
+```
+
 E2E Tests Prerequisites:
 
 * [Kind](https://kind.sigs.k8s.io/docs/user/quick-start#installing-from-release-binaries)
@@ -17,43 +23,38 @@ E2E Tests Prerequisites:
 * Docker
 * [ArgoCD CLI](https://argo-cd.readthedocs.io/en/stable/getting_started/#2-download-argo-cd-cli)
 
-Create Kind cluster:
+Start infrastructure, keep process running in background:
 
 ```
-cat tests/kind.yaml.envsubst | envsubst > tests/kind.yaml
-kind create cluster --config tests/kind.yaml
+python -m tests.cli start-infra --with-observability --build
 ```
+
+In a separate terminal -
 
 Make sure you are connected to the testing cluster: `kubectl cluster-info`
 
 You should see the cluster running at localhost / 127.0.0.1
 
-Install test dependencies:
-
-```bash
-pip install -r tests/requirements.txt
-```
-
 Run the tests:
 
 ```bash
-pytest
+pytest -svvx
 ```
-
-To log in to the ArgoCD / Vault created in the E2E tests:
-
-```
-export PORT_FORWARDS_KEEP=1
-pytest -svvx tests/test_e2e.py
-```
-
-The final log line will contain the login details
 
 Code changes will automatically be reloaded in the test cluster, but if you made changes
-to requirements or the Dockerfile, you will need to rebuild the image and restart the deployment:
+to requirements or the Dockerfile, you will need to rebuild the image, you can run the following command
+to rebuild without recreating the cluster:
 
 ```
-docker build -t ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest .
-kind load docker-image ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest
-kubectl rollout restart deployment/argocd-repo-server -n argocd
+python -m tests.cli start-infra --with-observability --build --skip-create-cluster
+```
+
+If you want to make sure you run tests from a clean state, you can run without `--skip-create-cluster` flag to
+recreate the cluster from scratch.
+
+Once test infra is running with observability, you can send observability data to it from tests and from local running 
+of plugin commands by setting the following env var:
+
+```
+export ENABLE_OTLP=1
 ```

@@ -1,9 +1,15 @@
+import os
 import click
+
+from . import observability
 
 
 @click.group()
-def main():
-    pass
+@click.option('--otlp', is_flag=True, help='Enable Open Telemetry')
+def main(otlp):
+    if otlp or os.environ.get('ENABLE_OTLP'):
+        os.environ['ENABLE_OTLP'] = '1'
+    observability.init()
 
 
 @main.command()

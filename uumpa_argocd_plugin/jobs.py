@@ -7,7 +7,7 @@ import traceback
 import importlib
 import subprocess
 
-from . import generators, common
+from . import generators, common, observability
 
 
 def dry_run_print_dir(tmpdir):
@@ -21,24 +21,28 @@ def dry_run_print_dir(tmpdir):
 
 
 def run_job_script(generator, tmpdir, env, dry_run):
-    script = generator['script']
-    os.chmod(os.path.join(tmpdir, script), 0o755)
-    if dry_run:
-        print('\n-----------------\n')
-        print(f'Run script: {script}\nenv: {env}')
-        dry_run_print_dir(tmpdir)
-        print('\n-----------------\n')
-    else:
-        subprocess.check_call([os.path.join(tmpdir, script)], cwd=tmpdir, env={**os.environ, **env})
+    with observability.start_as_current_span(run_job_script):
+        observability.set_attributes(generator=generator, env=env, dry_run=dry_run)
+        script = generator['script']
+        observability.set_attribute('script', script)
+        os.chmod(os.path.join(tmpdir, script), 0o755)
+        if dry_run:
+            print('\n-----------------\n')
+            print(f'Run script: {script}\nenv: {env}')
+            dry_run_print_dir(tmpdir)
+            print('\n-----------------\n')
+        else:
+            subprocess.check_call([os.path.join(tmpdir, script)], cwd=tmpdir, env={**os.environ, **env})
 
 
 def run_job_python(generator, tmpdir, env, dry_run):
     module, method = generator['python-module-function'].split(':')
-    if dry_run:
-        print(f'Run Python module: {module} method: {method}\nenv: {env}')
-        dry_run_print_dir(tmpdir)
-    else:
-        getattr(importlib.import_module(module), method)(tmpdir, env)
+    with observability.start_as_current_span(run_job_python, f'({module}.{method})', attributes=dict(generator=generator, env=env, dry_run=dry_run, module=module, method=method)):
+        if dry_run:
+            print(f'Run Python module: {module} method: {method}\nenv: {env}')
+            dry_run_print_dir(tmpdir)
+        else:
+            getattr(importlib.import_module(module), method)(tmpdir, env)
 
 
 def run_job_subgenerators(job_status, generator, data_, dry_run):
@@ -58,21 +62,25 @@ def run_job_subgenerators(job_status, generator, data_, dry_run):
 
 
 def run_job_process_env(file_paths, tmpdir, job_files_b64, generator_env, data_):
-    for i, file_path in enumerate(file_paths):
-        os.makedirs(os.path.dirname(os.path.join(tmpdir, file_path)), exist_ok=True)
-        with open(os.path.join(tmpdir, file_path), 'w') as f:
-            f.write(base64.b64decode(job_files_b64[f'file_{i}']).decode())
-    env_ = {}
-    for k, v in generator_env.items():
-        v = common.render(v, data_)
-        if v.startswith('FILE::'):
-            env_[k] = os.path.join(tmpdir, f'.{k}')
-            with open(os.path.join(tmpdir, f'.{k}'), 'w') as f:
-                f.write(v[6:])
-            os.chmod(os.path.join(tmpdir, f'.{k}'), 0o600)
-        else:
-            env_[k] = v
-    return env_
+    with observability.start_as_current_span(run_job_process_env):
+        for i, file_path in enumerate(file_paths):
+            os.makedirs(os.path.dirname(os.path.join(tmpdir, file_path)), exist_ok=True)
+            with open(os.path.join(tmpdir, file_path), 'w') as f:
+                contents = base64.b64decode(job_files_b64[f'file_{i}']).decode()
+                observability.set_attribute(f'file_{i}', contents)
+                f.write(contents)
+        env_ = {}
+        for k, v in generator_env.items():
+            v = common.render(v, data_)
+            if v.startswith('FILE::'):
+                env_[k] = os.path.join(tmpdir, f'.{k}')
+                with open(os.path.join(tmpdir, f'.{k}'), 'w') as f:
+                    f.write(v[6:])
+                os.chmod(os.path.join(tmpdir, f'.{k}'), 0o600)
+            else:
+                env_[k] = v
+        observability.set_attribute('env', json.dumps(env_))
+        return env_
 
 
 def run_job(job, job_files_b64, generator, data_, dry_run=False):
@@ -126,7 +134,7 @@ def main_local(generate_output, dry_run=False):
     uumpa_jobs = presync_uumpa_jobs + sync_uumpa_jobs + postsync_uumpa_jobs
     print(f'Found {len(uumpa_jobs)} uumpa jobs to run')
     for uumpa_job in uumpa_jobs:
-        name = uumpa_job['metadata']['generateName']
+        name = uumpa_job['metadata']['name']
         files_data = job_files_data.get(f'{name}-files', {})
         assert uumpa_job['spec']['template']['spec']['containers'][0]['command'] == ['uumpa-argocd-plugin']
         args = uumpa_job['spec']['template']['spec']['containers'][0]['args']
@@ -146,11 +154,16 @@ def main_local(generate_output, dry_run=False):
 
 
 def main(job_json_b64, uumpa_job_files_path='/var/uumpa-job-files'):
-    job = json.loads(base64.b64decode(job_json_b64).decode())
-    generator = job['generator']
-    data_ = job['data']
-    job_files_b64 = {}
-    for i, file_path in enumerate(job.get('file_paths', [])):
-        with open(os.path.join(uumpa_job_files_path, f'file_{i}')) as f:
-            job_files_b64[f'file_{i}'] = f.read().strip()
-    assert _run_job(job, job_files_b64, generator, data_)
+    with observability.start_as_current_span(main, attributes={
+        'job_json_b64': job_json_b64,
+        'uumpa_job_files_path': uumpa_job_files_path
+    }):
+        job = json.loads(base64.b64decode(job_json_b64).decode())
+        observability.set_attributes(job=job)
+        generator = job['generator']
+        data_ = job['data']
+        job_files_b64 = {}
+        for i, file_path in enumerate(job.get('file_paths', [])):
+            with open(os.path.join(uumpa_job_files_path, f'file_{i}')) as f:
+                job_files_b64[f'file_{i}'] = f.read().strip()
+        assert _run_job(job, job_files_b64, generator, data_)

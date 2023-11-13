@@ -70,7 +70,11 @@ def assert_argocd_app_jobs(name, expected_nfs_init_configmap, expected_nfs_init_
     assert len(jobs) > 0
     nfs_init_job = None
     for job in jobs:
-        assert job['status']['active'] == 0, f'Job {job["metadata"]["name"]} is still active'
+        completed = False
+        for condition in job.get('status', {}).get('conditions', []):
+            if condition.get('type') == 'Complete' and condition.get('status') == 'True':
+                completed = True
+        assert completed, f'Job {job["metadata"]["name"]} did not complete'
         if job['metadata']['name'].startswith(f'{name}-nfs-init'):
             nfs_init_job = job
     if expected_nfs_init_job:
@@ -98,19 +102,18 @@ def assert_argocd_app(name, expected_configmap_changes=None, expected_testdep_so
         assert expected_testdep_source == json.loads(subprocess.check_output(
             f'kubectl -n {name} get configmap testdep -o json', shell=True
         ))['data']['source']
-        if expected_nfs_init_job:
-            assert_argocd_app_jobs(name, expected_nfs_init_configmap, expected_nfs_init_job)
+        assert_argocd_app_jobs(name, expected_nfs_init_configmap, expected_nfs_init_job)
     except Exception as e:
         raise Exception(f'Failed to assert argocd app {name}') from e
     return configmap
 
 
-def test_base(argocd):
+def test_base(start_infra):
     argocd_app_git_hard_refresh_sync('tests-base')
     assert_argocd_app('tests-base')
 
 
-def test_base_production(argocd):
+def test_base_production(start_infra):
     delete_vault_paths(['production'])
     argocd_app_git_hard_refresh_sync('tests-base-production')
     configmap = assert_argocd_app(
@@ -147,7 +150,7 @@ def get_vault_paths(paths):
     return res
 
 
-def test_base_staging(argocd):
+def test_base_staging(start_infra):
     delete_vault_paths(['staging/alertmanager-httpauth', 'staging/nfs'])
     argocd_app_git_hard_refresh_sync('tests-base-staging')
     configmap = assert_argocd_app(

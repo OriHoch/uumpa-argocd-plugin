@@ -41,7 +41,6 @@ def test_generate_local():
         ]
 
 
-
 def test_generate_argocd():
     with tempfile.TemporaryDirectory() as tmpdir:
         with open(os.path.join(tmpdir, config.ARGOCD_ENV_UUMPA_DATA_CONFIG), 'w') as f:

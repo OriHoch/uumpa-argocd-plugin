@@ -202,37 +202,38 @@ the secrets and configmaps.
 
 Make sure to set any additional env vars which are needed for the plugin to run.
 
-Create a virtualenv and install the plugin and dependencies:
+Create a virtualenv and install the plugin and dependencies 
+(this assumes you cloned the uumpa-argocd-plugin repo to directory `~/uumpa-argocd-plugin`):
 
 ```bash
 python3 -m venv venv
-venv/bin/pip install -r requirements.txt
-venv/bin/pip install -e .
+venv/bin/pip install -r ~/uumpa-argocd-plugin/requirements.txt
+venv/bin/pip install -e ~/uumpa-argocd-plugin
 ```
 
 Generate the templates:
 
 ```bash
 . venv/bin/activate
-uumpa-argocd-plugin local-generate NAMESPACE_NAME /path/to/chart
+uumpa-argocd-plugin generate --namespace NAMESPACE_NAME --chart-path /path/to/chart
 ```
 
-Add helm args to pass to the helm template command:
+You can also pass additional arguments to the helm template command:
 
 ```bash
-uumpa-argocd-plugin local-generate NAMESPACE_NAME /path/to/chart --include-crds --values my-values.yaml
+uumpa-argocd-plugin generate --namespace NAMESPACE_NAME --chart-path /path/to/chart --helm-args "--include-crds --values my-values.yaml"
 ```
 
 Output only the generators without the helm chart:
 
 ```bash
-uumpa-argocd-plugin local-generate-generators NAMESPACE_NAME /path/to/chart
+uumpa-argocd-plugin generate --namespace NAMESPACE_NAME --chart-path /path/to/chart --only-generators
 ```
 
-Run the jobs from the generators instead of rendering the helm templates
+You can also run the generator jobs locally, this will run the jobs locally on your machine:
 
 ```bash
-uumpa-argocd-plugin local-run-jobs NAMESPACE_NAME /path/to/chart [--dry-run]
+uumpa-argocd-plugin generate --namespace NAMESPACE_NAME --chart-path /path/to/chart --run-jobs
 ```
 
 ## Reference

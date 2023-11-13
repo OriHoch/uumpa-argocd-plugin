@@ -11,7 +11,7 @@
   if: not nfs_initialized
   type: job
   # Following 2 values are the same as the ArgoCD hook attributes, see https://argo-cd.readthedocs.io/en/stable/user-guide/resource_hooks/
-  hook: PreSync
+  hook: Sync
   hook-delete-policy: BeforeHookCreation
   name: nfs-init
   # path to the script to run relative to the chart root, script should have a shebang line specifying the interpreter

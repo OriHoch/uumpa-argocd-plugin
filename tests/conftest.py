@@ -23,8 +23,11 @@ def start_infra():
     if os.environ.get('CI') == 'true':
         with common.start_infra(
                 with_observability=os.environ.get('WITH_OBSERVABILITY') == 'true',
-                build=True, skip_create_cluster=False
+                build=True,
+                skip_create_cluster=os.environ.get('SKIP_CREATE_CLUSTER') == 'true',
         ):
             yield
+            if os.environ.get('PAUSE') == 'true':
+                input('Press enter to continue...')
     else:
         yield

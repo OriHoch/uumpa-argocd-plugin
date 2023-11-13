@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cmd-params-cm
+data:
+  # Cache expiration for repo state, incl. app lists, app details, manifest generation, revision meta-data (default 24h0m0s)
+  reposerver.repo.cache.expiration: "24h0m0s"
+  # Cache expiration default (default 24h0m0s)
+  reposerver.default.cache.expiration: "24h0m0s"

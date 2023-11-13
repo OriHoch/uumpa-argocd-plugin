@@ -1,16 +1,20 @@
 import base64
 import json
 import subprocess
+import functools
 
-from .common import argocd_app_diff_sync
+from .common import argocd_app_diff_sync, wait_for, verify_argocd_app_synced, verify_argocd_app_healthy
 
 
 def argocd_app_git_hard_refresh_sync(app_name):
     subprocess.check_call(f'kubectl delete ns {app_name} --ignore-not-found --wait', shell=True)
     if app_name != 'tests-base':
         argocd_app_diff_sync(f'{app_name}-prepare')
-    subprocess.check_call(f'kubectl delete job -lapp.kubernetes.io/instance={app_name} --ignore-not-found --wait', shell=True)
-    argocd_app_diff_sync(app_name)
+    subprocess.check_call(f'argocd app diff --hard-refresh --exit-code=false {app_name}', shell=True)
+    subprocess.check_call(f'argocd app sync {app_name} --assumeYes --prune', shell=True)
+    wait_for(functools.partial(verify_argocd_app_synced, app_name), 10, f'argocd app {app_name} did not sync')
+    print(f'Waiting for argocd app {app_name} to be healthy...')
+    wait_for(functools.partial(verify_argocd_app_healthy, app_name), 120, f'argocd app {app_name} did not become healthy')
 
 
 def assert_argocd_app_configmap(name, expected_configmap_changes):

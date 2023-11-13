@@ -186,7 +186,7 @@ Runs a script using the same image and configuration as the Uumpa argocd plugin 
 | Name                   | Description                                                                                                       | Default                            |
 |------------------------|-------------------------------------------------------------------------------------------------------------------|------------------------------------|
 | type                   | `job`                                                                                                             | -                                  |
-| hook                   | ArgoCD hook to run the job as, see https://argo-cd.readthedocs.io/en/stable/user-guide/resource_hooks/            | PreSync                            |
+| hook                   | ArgoCD hook to run the job as, see https://argo-cd.readthedocs.io/en/stable/user-guide/resource_hooks/            | Sync                            |
 | hook-delete-policy     | ArgoCD hook delete policy, see https://argo-cd.readthedocs.io/en/stable/user-guide/resource_hooks/                | BeforeHookCreation                 |
 | name                   | Name of the hook, required for identification, must be valid for Kubernetes job / configmap name                  | -                                  |
 | script                 | Path to script relative to the chart root, script will run as executable so make sure it has a shebang            | -                                  |

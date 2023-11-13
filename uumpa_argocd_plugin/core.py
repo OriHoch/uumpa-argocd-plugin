@@ -77,7 +77,7 @@ def process_generator_job(generator, data_, is_skipped=False):
                     files_configmap_data[f'file_{i}'] = base64.b64encode(f.read().encode()).decode()
             namespace_name = data_['__namespace_name']
             hook_name = generator['name']
-            hook = generator.get('hook', 'PreSync')
+            hook = generator.get('hook', 'Sync')
             hook_delete_policy = generator.get('hook-delete-policy', 'BeforeHookCreation')
             volumes = repo_server_spec['volumes']
             if len(file_paths) > 0:

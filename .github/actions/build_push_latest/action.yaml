@@ -1,0 +1,27 @@
+name: Build and Push Latest
+description: Build and Push Latest Docker Images
+inputs:
+  GITHUB_TOKEN:
+    required: true
+    description: "github token for docker push"
+runs:
+  using: composite
+  steps:
+    - name: Build and Push Latest
+      shell: bash
+      run: |
+        echo ${{ inputs.GITHUB_TOKEN }} | docker login ghcr.io -u orihoch --password-stdin &&\
+        docker pull ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest &&\
+        docker build --cache-from ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest \
+          -t ghcr.io/orihoch/uumpa-argocd-plugin/plugin:${{ github.sha }} \
+          . &&\
+        docker pull ghcr.io/orihoch/uumpa-argocd-plugin/plugin-with-observability:latest &&\
+        docker build --cache-from ghcr.io/orihoch/uumpa-argocd-plugin/plugin-with-observability:latest \
+          -t ghcr.io/orihoch/uumpa-argocd-plugin/plugin-with-observability:${{ github.sha }} \
+          -f Dockerfile.observability . &&\
+        docker push ghcr.io/orihoch/uumpa-argocd-plugin/plugin:${{ github.sha }} &&\
+        docker push ghcr.io/orihoch/uumpa-argocd-plugin/plugin-with-observability:${{ github.sha }} &&\
+        docker tag ghcr.io/orihoch/uumpa-argocd-plugin/plugin:${{ github.sha }} ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest &&\
+        docker push ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest &&\
+        docker tag ghcr.io/orihoch/uumpa-argocd-plugin/plugin-with-observability:${{ github.sha }} ghcr.io/orihoch/uumpa-argocd-plugin/plugin-with-observability:latest &&\
+        docker push ghcr.io/orihoch/uumpa-argocd-plugin/plugin-with-observability:latest

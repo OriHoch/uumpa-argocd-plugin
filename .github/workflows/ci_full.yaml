@@ -38,23 +38,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: .github/actions/build_push_latest
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/setup-python@v4
         with:
           python-version: 3.11
-      - name: Build
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u orihoch --password-stdin &&\
-          docker pull ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest &&\
-          docker build --cache-from ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest -t ghcr.io/orihoch/uumpa-argocd-plugin/plugin:${{ github.sha }} . &&\
-          docker build -t ghcr.io/orihoch/uumpa-argocd-plugin/plugin-with-observability:${{ github.sha }} -f Dockerfile.observability . &&\
-          docker push ghcr.io/orihoch/uumpa-argocd-plugin/plugin:${{ github.sha }} &&\
-          docker push ghcr.io/orihoch/uumpa-argocd-plugin/plugin-with-observability:${{ github.sha }} &&\
-          docker tag ghcr.io/orihoch/uumpa-argocd-plugin/plugin:${{ github.sha }} ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest &&\
-          docker push ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest &&\
-          docker tag ghcr.io/orihoch/uumpa-argocd-plugin/plugin-with-observability:${{ github.sha }} ghcr.io/orihoch/uumpa-argocd-plugin/plugin-with-observability:latest &&\
-          docker push ghcr.io/orihoch/uumpa-argocd-plugin/plugin-with-observability:latest
       - name: render readme
         run: |
           python render_readme.py > README.md

@@ -434,3 +434,4 @@ def run_generator_job(tmpdir, env):
     generator = json.loads(env['MY_GENERATOR_JSON'])
     # do something with the generator
 ```
+

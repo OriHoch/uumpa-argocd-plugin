@@ -5,8 +5,11 @@ on:
     paths-ignore:
       - "**.md"
 jobs:
-  ci:
+  tests:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        WITH_OBSERVABILITY: ["true", "false"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
@@ -18,6 +21,8 @@ jobs:
           pip install -r requirements.txt &&\
           pip install -r tests/requirements.txt
       - name: tests
+        env:
+          WITH_OBSERVABILITY: ${{ matrix.WITH_OBSERVABILITY }}
         run: |
           sudo curl -Lo /usr/local/bin/kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64 &&\
           sudo chmod +x /usr/local/bin/kind &&\
@@ -27,6 +32,15 @@ jobs:
           sudo chmod +x /usr/local/bin/kubectl &&\
           sed -i '/---snip---/q' "kustomize/tests/argocd/base/patch-argocd-repo-server-deployment.yaml" &&\
           pytest
+  ci:
+    needs:
+      - tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
       - name: Build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -34,9 +48,13 @@ jobs:
           echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u orihoch --password-stdin &&\
           docker pull ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest &&\
           docker build --cache-from ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest -t ghcr.io/orihoch/uumpa-argocd-plugin/plugin:${{ github.sha }} . &&\
+          docker build -t ghcr.io/orihoch/uumpa-argocd-plugin/plugin-with-observability:${{ github.sha }} -f Dockerfile.observability . &&\
           docker push ghcr.io/orihoch/uumpa-argocd-plugin/plugin:${{ github.sha }} &&\
+          docker push ghcr.io/orihoch/uumpa-argocd-plugin/plugin-with-observability:${{ github.sha }} &&\
           docker tag ghcr.io/orihoch/uumpa-argocd-plugin/plugin:${{ github.sha }} ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest &&\
-          docker push ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest
+          docker push ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest &&\
+          docker tag ghcr.io/orihoch/uumpa-argocd-plugin/plugin-with-observability:${{ github.sha }} ghcr.io/orihoch/uumpa-argocd-plugin/plugin-with-observability:latest &&\
+          docker push ghcr.io/orihoch/uumpa-argocd-plugin/plugin-with-observability:latest
       - name: render readme
         run: |
           python render_readme.py > README.md

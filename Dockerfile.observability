@@ -1,0 +1,3 @@
+FROM ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest
+COPY requirements-observability.txt /srv/requirements-observability.txt
+RUN pip install -r /srv/requirements-observability.txt

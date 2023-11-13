@@ -21,7 +21,10 @@ def observability_span_function(request, observability_span_session):
 @pytest.fixture(scope="session")
 def start_infra():
     if os.environ.get('CI') == 'true':
-        with common.start_infra(with_observability=False, build=True, skip_create_cluster=False):
+        with common.start_infra(
+                with_observability=os.environ.get('WITH_OBSERVABILITY') == 'true',
+                build=True, skip_create_cluster=False
+        ):
             yield
     else:
         yield

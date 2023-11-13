@@ -154,8 +154,12 @@ def start_infra(with_observability=False, build=False, skip_create_cluster=False
             subprocess.check_call('cat tests/kind.yaml.envsubst | envsubst > tests/kind.yaml', shell=True)
             subprocess.check_call('kind create cluster --config tests/kind.yaml --wait 240s', shell=True)
         if build:
-            subprocess.check_call('docker build -t ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest .', shell=True)
-            subprocess.check_call('kind load docker-image ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest', shell=True)
+            load_image = 'ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest'
+            subprocess.check_call(f'docker build -t {load_image} .', shell=True)
+            if with_observability:
+                load_image = 'ghcr.io/orihoch/uumpa-argocd-plugin/plugin-with-observability:latest'
+                subprocess.check_call(f'docker build -t {load_image} -f Dockerfile.observability .', shell=True)
+            subprocess.check_call(f'kind load docker-image {load_image}', shell=True)
             if skip_create_cluster:
                 subprocess.call('kubectl -n argocd delete deployment argocd-repo-server', shell=True)
         if with_observability and subprocess.call('kubectl get -n observability svc/jaeger-collector', shell=True) == 0:

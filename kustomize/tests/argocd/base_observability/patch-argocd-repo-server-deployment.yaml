@@ -7,7 +7,7 @@ spec:
     spec:
       containers:
         - name: uumpa
-          image: ghcr.io/orihoch/uumpa-argocd-plugin/plugin:latest
+          image: ghcr.io/orihoch/uumpa-argocd-plugin/plugin-with-observability:latest
           env:
             - name: ENABLE_OTLP
               value: "1"

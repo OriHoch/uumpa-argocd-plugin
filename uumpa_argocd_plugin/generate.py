@@ -1,7 +1,8 @@
 import os
+import importlib
 import subprocess
 
-from . import data, common, generators, env, jobs, observability
+from . import data, common, generators, env, jobs, observability, config
 
 
 def post_process_output(output, data_):
@@ -9,6 +10,15 @@ def post_process_output(output, data_):
         if hasattr(module, 'post_process_output'):
             output = module.post_process_output(output, data_)
     return output
+
+
+def process_generate_template_plugin_function(generate_template_plugin_function, cmd, cwd, data_):
+    print(f'process_generate_template_plugin_function: {generate_template_plugin_function} ({cmd}, {cwd})')
+    if '.' not in generate_template_plugin_function and ':' not in generate_template_plugin_function:
+        generate_template_plugin_function = f'uumpa_argocd_plugin.core:{generate_template_plugin_function}'
+    module, function = generate_template_plugin_function.split(':')
+    cmd, cwd = getattr(importlib.import_module(module), function)(cmd, cwd, data_)
+    return cmd, cwd
 
 
 def main(chart_path=None, app_name=None, namespace=None, kube_version=None, kube_api_versions=None, helm_args=None,
@@ -41,7 +51,12 @@ def main(chart_path=None, app_name=None, namespace=None, kube_version=None, kube
                         cmd += f' --api-versions {version.strip()}'
             if helm_args:
                 cmd += f' {helm_args}'
-            with observability.start_as_current_span('helm_template', attributes={'cmd': cmd, 'cwd': chart_path}):
+            cwd = chart_path
+            if config.ARGOCD_ENV_GENERATE_TEMPLATE_PLUGIN_FUNCTIONS:
+                generate_template_plugin_functions = [s.strip() for s in config.ARGOCD_ENV_GENERATE_TEMPLATE_PLUGIN_FUNCTIONS.split(',') if s.strip()]
+                for generate_template_plugin_function in generate_template_plugin_functions:
+                    cmd, cwd = process_generate_template_plugin_function(generate_template_plugin_function, cmd, cwd, data_)
+            with observability.start_as_current_span('helm_template', attributes={'cmd': cmd, 'cwd': cwd}):
                 output.append(subprocess.check_output(cmd, shell=True, text=True, cwd=chart_path))
         output = common.render('\n---\n'.join(output), data_)
         output = post_process_output(output, data_)

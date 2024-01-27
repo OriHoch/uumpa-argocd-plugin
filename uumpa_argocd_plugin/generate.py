@@ -13,7 +13,6 @@ def post_process_output(output, data_):
 
 
 def process_generate_template_plugin_function(generate_template_plugin_function, cmd, cwd, data_):
-    print(f'process_generate_template_plugin_function: {generate_template_plugin_function} ({cmd}, {cwd})')
     if '.' not in generate_template_plugin_function and ':' not in generate_template_plugin_function:
         generate_template_plugin_function = f'uumpa_argocd_plugin.core:{generate_template_plugin_function}'
     module, function = generate_template_plugin_function.split(':')

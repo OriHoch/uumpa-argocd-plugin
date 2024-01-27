@@ -240,18 +240,19 @@ uumpa-argocd-plugin generate --namespace NAMESPACE_NAME --chart-path /path/to/ch
 
 ### Environment variables
 
-| Name                                  | Description                                                                   | Default               |
-|---------------------------------------|-------------------------------------------------------------------------------|-----------------------|
-| ARGOCD_ENV_UUMPA_DATA_CONFIG          | Path to the data config file relative to the helm chart root                  | uumpa_data.yaml       |
-| ARGOCD_ENV_UUMPA_GENERATORS_CONFIG    | Path to the hooks config file relative to the helm chart root                 | uumpa_generators.yaml |
-| ARGOCD_ENV_UUMPA_ENV_CONFIG           | Path to the env config file relative to the helm chart root                   | uumpa_env.yaml        |
-| ARGOCD_NAMESPACE                      | Namespace of the ArgoCD application, used to create jobs                      | argocd                |
-| ARGOCD_REPO_SERVER_DEPLOYMENT         | Name of the ArgoCD repo server deployment, used to create jobs                | argocd-repo-server    |
-| ARGOCD_UUMPA_PLUGIN_CONTAINER         | Name of the plugin sidecar container, used to create jobs                     | uumpa                 |
-| ARGOCD_UUMPA_GLOBAL_DATA_CONFIG       | Absolute path to a global data config file                                    | -                     |
-| ARGOCD_UUMPA_GLOBAL_GENERATORS_CONFIG | Absolute path to a global generators config file                              | -                     |
-| ARGOCD_ENV_INIT_PLUGIN_FUNCTIONS      | Comma separated list of plugin functions to run on initialization (if needed) | -                     |
-| ARGOCD_ENV_HELM_ARGS                  | Additional arguments to pass to the helm template command                     | -                     |
+| Name                                          | Description                                                                      | Default               |
+|-----------------------------------------------|----------------------------------------------------------------------------------|-----------------------|
+| ARGOCD_ENV_UUMPA_DATA_CONFIG                  | Path to the data config file relative to the helm chart root                     | uumpa_data.yaml       |
+| ARGOCD_ENV_UUMPA_GENERATORS_CONFIG            | Path to the hooks config file relative to the helm chart root                    | uumpa_generators.yaml |
+| ARGOCD_ENV_UUMPA_ENV_CONFIG                   | Path to the env config file relative to the helm chart root                      | uumpa_env.yaml        |
+| ARGOCD_NAMESPACE                              | Namespace of the ArgoCD application, used to create jobs                         | argocd                |
+| ARGOCD_REPO_SERVER_DEPLOYMENT                 | Name of the ArgoCD repo server deployment, used to create jobs                   | argocd-repo-server    |
+| ARGOCD_UUMPA_PLUGIN_CONTAINER                 | Name of the plugin sidecar container, used to create jobs                        | uumpa                 |
+| ARGOCD_UUMPA_GLOBAL_DATA_CONFIG               | Absolute path to a global data config file                                       | -                     |
+| ARGOCD_UUMPA_GLOBAL_GENERATORS_CONFIG         | Absolute path to a global generators config file                                 | -                     |
+| ARGOCD_ENV_INIT_PLUGIN_FUNCTIONS              | Comma separated list of plugin functions to run on initialization (if needed)    | -                     |
+| ARGOCD_ENV_GENERATE_TEMPLATE_PLUGIN_FUNCTIONS | Comma separated list of plugin functions to run on generate template (if needed) | -                     |
+| ARGOCD_ENV_HELM_ARGS                          | Additional arguments to pass to the helm template command                        | -                     |
 
 Env vars prefixed with `ARGOCD_ENV_` must be set in the ArgoCD app spec without this prefix, for example:
 
